@@ -1,7 +1,8 @@
 # AlchemyFace
 
-![coverage](docs/coverage.svg)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![PyPI](https://img.shields.io/pypi/v/alchemyface.svg)](https://pypi.org/project/alchemyface/)
+[![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
 Face detection and recognition built on [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
@@ -117,25 +118,29 @@ constant — validate it against your own data before relying on it.
 ## Development
 
 Requires [`pyenv`](https://github.com/pyenv/pyenv) with
-[`pyenv-virtualenv`](https://github.com/pyenv/pyenv-virtualenv), and
-[`poetry`](https://python-poetry.org/).
+[`pyenv-virtualenv`](https://github.com/pyenv/pyenv-virtualenv).
 
 ```bash
 pyenv install 3.10.6                      # if not already present
 pyenv virtualenv 3.10.6 alchemyface       # .python-version activates it here
-make install
+pip install -e ".[dev]"
 ```
 
 | Command | Does |
 |---|---|
-| `make install` | install all dependency groups into the pyenv env |
-| `make test` | pytest with coverage, fails under 80% |
-| `make format` | black + isort |
-| `make lint` | pylint |
-| `make check_type` | mypy |
-| `make build` | build the wheel and sdist |
-| `make doc` | serve the mkdocs site |
-| `make check_license` | flag copyleft licences in the dependency tree |
+| `pytest tests/ -m "not models and not camera"` | the fast suite — no models, camera or network |
+| `pytest tests/ -m "not camera"` | adds the tests that load the real ONNX weights |
+| `ruff check src tests` | lint |
+| `ruff format src tests` | format |
+| `mypy src/alchemyface` | type check |
+| `python -m build` | build the wheel and sdist |
+
+Tests that need the real weights are marked `models` and skip unless
+`ALCHEMYFACE_MODEL_DIR` points at a directory containing them:
+
+```bash
+export ALCHEMYFACE_MODEL_DIR="$PWD/_local/onnx"
+```
 
 ## A note on data
 
@@ -148,7 +153,7 @@ wheel, the sdist and version control, and they must never be published.
 
 ## Licence
 
-To be decided before the first PyPI release.
+MIT — see [LICENSE](LICENSE).
 
 The ONNX weights are distributed by the [OpenCV Zoo](https://github.com/opencv/opencv_zoo)
 under their own terms — YuNet under MIT, SFace under Apache-2.0 — and are

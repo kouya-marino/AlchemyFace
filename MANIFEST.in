@@ -1,0 +1,16 @@
+include LICENSE
+include README.md
+include CHANGELOG.md
+include requirements.txt
+include requirements-dev.txt
+include src/alchemyface/py.typed
+
+# Never ship: personal data, model weights, developer scaffolding.
+prune _local
+prune examples
+prune tests
+prune docs
+prune htmlcov
+global-exclude *.npy *.npz *.onnx *.mp3 *.pt
+global-exclude *.py[cod]
+global-exclude .DS_Store

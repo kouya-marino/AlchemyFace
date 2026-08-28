@@ -48,9 +48,7 @@ def test_explicit_model_dir_wins_over_env(
         d.mkdir()
         (d / "canonical.onnx").write_bytes(PAYLOAD)
     monkeypatch.setenv("ALCHEMYFACE_MODEL_DIR", str(env))
-    assert (
-        models.find_local(local_spec, model_dir=explicit) == explicit / "canonical.onnx"
-    )
+    assert models.find_local(local_spec, model_dir=explicit) == explicit / "canonical.onnx"
 
 
 def test_env_var_is_used_when_no_explicit_dir(
@@ -61,9 +59,7 @@ def test_env_var_is_used_when_no_explicit_dir(
     assert models.find_local(local_spec) == tmp_path / "canonical.onnx"
 
 
-def test_alias_filename_is_found(
-    tmp_path: Path, local_spec: ModelSpec, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_alias_filename_is_found(tmp_path: Path, local_spec: ModelSpec, monkeypatch: pytest.MonkeyPatch) -> None:
     # The prototype's weights use different filenames; they must still resolve.
     monkeypatch.setenv("ALCHEMYFACE_MODEL_DIR", str(tmp_path))
     (tmp_path / "legacy_name.onnx").write_bytes(PAYLOAD)
@@ -78,17 +74,13 @@ def test_find_local_returns_none_when_absent(
     assert models.find_local(local_spec) is None
 
 
-def test_download_writes_file_and_verifies_checksum(
-    tmp_path: Path, local_spec: ModelSpec
-) -> None:
+def test_download_writes_file_and_verifies_checksum(tmp_path: Path, local_spec: ModelSpec) -> None:
     dest = models.download(local_spec, dest_dir=tmp_path / "cache")
     assert dest.read_bytes() == PAYLOAD
     assert dest.name == "canonical.onnx"
 
 
-def test_download_rejects_a_checksum_mismatch(
-    tmp_path: Path, local_spec: ModelSpec
-) -> None:
+def test_download_rejects_a_checksum_mismatch(tmp_path: Path, local_spec: ModelSpec) -> None:
     wrong = ModelSpec(
         key=local_spec.key,
         filename=local_spec.filename,
@@ -114,9 +106,7 @@ def test_download_raises_on_a_missing_source(tmp_path: Path) -> None:
         models.download(spec, dest_dir=tmp_path / "cache")
 
 
-def test_resolve_prefers_a_local_file_over_downloading(
-    tmp_path: Path, local_spec: ModelSpec
-) -> None:
+def test_resolve_prefers_a_local_file_over_downloading(tmp_path: Path, local_spec: ModelSpec) -> None:
     (tmp_path / "canonical.onnx").write_bytes(b"local wins")
     resolved = models.resolve(local_spec, model_dir=tmp_path)
     assert resolved.read_bytes() == b"local wins"

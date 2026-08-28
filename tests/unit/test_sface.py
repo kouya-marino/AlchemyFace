@@ -57,9 +57,7 @@ def test_embed_returns_a_unit_vector(model_dir: Path) -> None:
 def test_the_same_input_embeds_identically(model_dir: Path) -> None:
     embedder = SFaceEmbedder(model_dir=model_dir)
     image, face = synthetic_face_image(), synthetic_face()
-    np.testing.assert_allclose(
-        embedder.embed(image, face), embedder.embed(image, face), atol=1e-6
-    )
+    np.testing.assert_allclose(embedder.embed(image, face), embedder.embed(image, face), atol=1e-6)
 
 
 @pytest.mark.models

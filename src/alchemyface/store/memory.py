@@ -31,9 +31,7 @@ def _as_unit_row(vector: NDArray[np.float32], dim: int) -> NDArray[np.float32]:
     """Validate, flatten and normalise. Accepts ``(dim,)`` or ``(1, dim)``."""
     flat = np.asarray(vector, dtype=np.float32).ravel()
     if flat.shape != (dim,):
-        raise ValueError(
-            f"expected a vector of dimension {dim}, got shape {np.shape(vector)}"
-        )
+        raise ValueError(f"expected a vector of dimension {dim}, got shape {np.shape(vector)}")
     norm = float(np.linalg.norm(flat))
     if norm == 0.0:
         raise ValueError("cannot store a zero vector: it has no direction")
@@ -119,10 +117,7 @@ class InMemoryStore:
         with np.load(path, allow_pickle=False) as data:
             dim = int(data["dim"])
             if dim != self._dim:
-                raise ValueError(
-                    f"gallery dimension {dim} does not match "
-                    f"store dimension {self._dim}"
-                )
+                raise ValueError(f"gallery dimension {dim} does not match store dimension {self._dim}")
             vectors = np.asarray(data["vectors"], dtype=np.float32)
             labels: list[str] = np.asarray(data["labels"]).tolist()
             entry_ids: list[str] = np.asarray(data["entry_ids"]).tolist()
@@ -130,6 +125,5 @@ class InMemoryStore:
 
         self._vectors = vectors.reshape(-1, self._dim)
         self._entries = [
-            _Entry(entry_id, label, dict(meta))
-            for entry_id, label, meta in zip(entry_ids, labels, metadata)
+            _Entry(entry_id, label, dict(meta)) for entry_id, label, meta in zip(entry_ids, labels, metadata)
         ]

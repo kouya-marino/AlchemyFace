@@ -1,0 +1,91 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  # Gate the release on the same checks as CI. Publishing is irreversible:
+  # PyPI never allows re-uploading a version, and a yanked release still
+  # occupies its number forever. Everything below runs before the upload.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Reject unexpected commit identities
+        run: |
+          ALLOWED='prashantrawatmailbox@gmail.com'
+          BAD=$(git log --format='%ae%n%ce' | sort -u | grep -vx "$ALLOWED" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::commit identities other than ${ALLOWED} found:"
+            printf '  %s\n' $BAD
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # Without this, several tags pointing at one commit each try to upload
+      # the same version, and only the first can ever succeed.
+      - name: Check the tag matches project.version
+        run: |
+          python - <<'PY'
+          import os, sys, tomllib
+          tag = os.environ["GITHUB_REF_NAME"]
+          want = tomllib.load(open("pyproject.toml", "rb"))["project"]["version"]
+          if tag != f"v{want}":
+              sys.exit(f"tag {tag} does not match pyproject version {want} (expected v{want})")
+          print(f"tag {tag} matches pyproject version {want}")
+          PY
+
+      - name: Install package (with dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check src tests
+          ruff format --check src tests
+
+      - name: Type check
+        run: mypy src/alchemyface
+
+      - name: Tests
+        run: pytest tests/ -m "not models and not camera" -q
+
+  publish:
+    needs: [verify]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # required for PyPI trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Build sdist + wheel
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+
+      - name: Refuse to ship personal data
+        run: |
+          LISTING=$(mktemp)
+          unzip -l dist/*.whl >> "$LISTING"
+          tar tzf dist/*.tar.gz >> "$LISTING"
+          if grep -iE '_local|face_data|sounds|id2map|eventlog|\.npy|\.npz|\.onnx|\.mp3|\.pt$' "$LISTING"; then
+            echo "::error::the distribution contains personal data or model weights"
+            exit 1
+          fi
+          echo "distribution is clean"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: false

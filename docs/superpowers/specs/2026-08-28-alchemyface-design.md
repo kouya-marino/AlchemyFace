@@ -1,5 +1,13 @@
 # AlchemyFace — design
 
+> **Toolchain superseded, 2026-08-28.** This document was written against
+> Poetry, a Makefile, and black/isort/pylint. The project was subsequently
+> aligned with its sibling repositories (AlchemyCV, AlchemyAnnotate,
+> AlchemyDetect, AlchemyCloud): **setuptools** with `requirements.txt`,
+> **ruff** at line-length 120, no Makefile, and PyPI **Trusted Publishing**.
+> Every design decision below still holds — only the tooling changed. Read
+> `pyproject.toml` and `.github/workflows/` for what is actually in use.
+
 **Date:** 2026-08-28
 **Status:** implemented on 2026-08-28. See
 `docs/superpowers/plans/2026-08-28-alchemyface-v0.1.md` for the plan that built it,
@@ -235,7 +243,7 @@ Controls in place:
 
 Before the repository is pushed to any remote, confirm `_local/` is untracked.
 
-## 9. Environment
+## 9. Environment (as originally specified — see the note at the top)
 
 pyenv supplies the interpreter and the virtualenv; Poetry manages dependencies.
 

@@ -57,9 +57,7 @@ def test_help_lists_every_command() -> None:
         assert command in result.stdout
 
 
-def test_enroll_writes_a_gallery(
-    image_file: Path, tmp_path: Path, fake_recognizer
-) -> None:
+def test_enroll_writes_a_gallery(image_file: Path, tmp_path: Path, fake_recognizer) -> None:
     gallery = tmp_path / "g.npz"
     result = runner.invoke(
         cli.app,
@@ -78,9 +76,7 @@ def test_enroll_writes_a_gallery(
     assert "ada" in result.stdout
 
 
-def test_enroll_appends_to_an_existing_gallery(
-    image_file: Path, tmp_path: Path, fake_recognizer
-) -> None:
+def test_enroll_appends_to_an_existing_gallery(image_file: Path, tmp_path: Path, fake_recognizer) -> None:
     gallery = tmp_path / "g.npz"
     for name in ("ada", "grace"):
         result = runner.invoke(
@@ -145,9 +141,7 @@ def test_enroll_exits_nonzero_for_a_missing_image(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
-def test_identify_reports_a_known_face(
-    image_file: Path, tmp_path: Path, fake_recognizer
-) -> None:
+def test_identify_reports_a_known_face(image_file: Path, tmp_path: Path, fake_recognizer) -> None:
     gallery = tmp_path / "g.npz"
     runner.invoke(
         cli.app,
@@ -161,28 +155,20 @@ def test_identify_reports_a_known_face(
             str(gallery),
         ],
     )
-    result = runner.invoke(
-        cli.app, ["identify", "--image", str(image_file), "--gallery", str(gallery)]
-    )
+    result = runner.invoke(cli.app, ["identify", "--image", str(image_file), "--gallery", str(gallery)])
     assert result.exit_code == 0, result.stdout
     assert "ada" in result.stdout
 
 
-def test_identify_reports_unknown_against_an_empty_gallery(
-    image_file: Path, tmp_path: Path, fake_recognizer
-) -> None:
+def test_identify_reports_unknown_against_an_empty_gallery(image_file: Path, tmp_path: Path, fake_recognizer) -> None:
     gallery = tmp_path / "empty.npz"
     InMemoryStore(dim=FakeEmbedder.dim).save(gallery)
-    result = runner.invoke(
-        cli.app, ["identify", "--image", str(image_file), "--gallery", str(gallery)]
-    )
+    result = runner.invoke(cli.app, ["identify", "--image", str(image_file), "--gallery", str(gallery)])
     assert result.exit_code == 0
     assert "unknown" in result.stdout.lower()
 
 
-def test_download_models_reports_each_model(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_download_models_reports_each_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []
 
     def fake_download(spec: ModelSpec, dest_dir: Path | None = None) -> Path:
@@ -196,15 +182,9 @@ def test_download_models_reports_each_model(
     assert sorted(seen) == ["detector", "embedder"]
 
 
-def test_download_models_skips_what_is_already_present(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        cli, "find_local", lambda spec, model_dir=None: tmp_path / spec.filename
-    )
-    monkeypatch.setattr(
-        cli, "download", lambda spec, dest_dir=None: pytest.fail("should not download")
-    )
+def test_download_models_skips_what_is_already_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cli, "find_local", lambda spec, model_dir=None: tmp_path / spec.filename)
+    monkeypatch.setattr(cli, "download", lambda spec, dest_dir=None: pytest.fail("should not download"))
     result = runner.invoke(cli.app, ["download-models"])
     assert result.exit_code == 0
     assert "already" in result.stdout.lower()

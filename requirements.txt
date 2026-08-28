@@ -1,0 +1,6 @@
+# Runtime dependencies, kept in step with pyproject.toml's [project] dependencies.
+# Installing the package itself (`pip install -e .`) is the usual route; this
+# file exists for environments that pin from a requirements file.
+opencv-python-headless>=4.9,<5
+numpy>=1.24,<3
+typer>=0.12,<1

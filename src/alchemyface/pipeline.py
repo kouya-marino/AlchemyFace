@@ -50,15 +50,9 @@ class Recognizer:
         from alchemyface.embedding.sface import SFaceEmbedder
         from alchemyface.store.memory import InMemoryStore
 
-        self.detector: Detector = (
-            detector if detector is not None else YuNetDetector(model_dir=model_dir)
-        )
-        self.embedder: Embedder = (
-            embedder if embedder is not None else SFaceEmbedder(model_dir=model_dir)
-        )
-        self.store: FaceStore = (
-            store if store is not None else InMemoryStore(dim=self.embedder.dim)
-        )
+        self.detector: Detector = detector if detector is not None else YuNetDetector(model_dir=model_dir)
+        self.embedder: Embedder = embedder if embedder is not None else SFaceEmbedder(model_dir=model_dir)
+        self.store: FaceStore = store if store is not None else InMemoryStore(dim=self.embedder.dim)
         self.threshold = threshold
 
     def detect(self, image: NDArray[np.uint8]) -> list[Face]:
@@ -83,9 +77,7 @@ class Recognizer:
         """
         faces = self.detect(image)
         if not faces:
-            raise NoFaceDetectedError(
-                f"no face found in the image supplied for {label!r}"
-            )
+            raise NoFaceDetectedError(f"no face found in the image supplied for {label!r}")
         face = max(faces, key=lambda candidate: candidate.area)
         return self.store.add(label, self.embed(image, face), metadata)
 

@@ -60,17 +60,13 @@ class YuNetDetector:
         # The `Xxx.create` class-method form is what cv2's bundled type stubs
         # declare; the module-level `FaceDetectorYN_create` alias is not, and
         # trips mypy with "Module has no attribute".
-        self._detector = cv2.FaceDetectorYN.create(
-            str(path), "", (320, 320), score_threshold, nms_threshold, top_k
-        )
+        self._detector = cv2.FaceDetectorYN.create(str(path), "", (320, 320), score_threshold, nms_threshold, top_k)
         self._input_size = (320, 320)
 
     def detect(self, image: NDArray[np.uint8]) -> list[Face]:
         """Every face found in a BGR image, with boxes clamped to its bounds."""
         if image.ndim != 3 or image.shape[2] != 3:
-            raise ValueError(
-                f"expected a three-channel BGR image, got shape {image.shape}"
-            )
+            raise ValueError(f"expected a three-channel BGR image, got shape {image.shape}")
         height, width = image.shape[:2]
         # The network is built for a fixed input size; it must be told
         # whenever the frame dimensions change or OpenCV raises.
@@ -83,7 +79,4 @@ class YuNetDetector:
             return []
         # Iterating a 2-D ndarray yields rows, but the numpy stubs type the
         # element as a scalar, so each row is re-asserted as a float32 array.
-        return [
-            face_from_row(np.asarray(row, dtype=np.float32), image.shape)
-            for row in rows
-        ]
+        return [face_from_row(np.asarray(row, dtype=np.float32), image.shape) for row in rows]

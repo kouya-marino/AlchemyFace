@@ -1,5 +1,13 @@
 # AlchemyFace v0.1 Implementation Plan
 
+> **Toolchain superseded, 2026-08-28.** This document was written against
+> Poetry, a Makefile, and black/isort/pylint. The project was subsequently
+> aligned with its sibling repositories (AlchemyCV, AlchemyAnnotate,
+> AlchemyDetect, AlchemyCloud): **setuptools** with `requirements.txt`,
+> **ruff** at line-length 120, no Makefile, and PyPI **Trusted Publishing**.
+> Every design decision below still holds — only the tooling changed. Read
+> `pyproject.toml` and `.github/workflows/` for what is actually in use.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn the empty `alchemyface` package skeleton into a working, typed, tested face-recognition library that detects faces, embeds them, stores them, and identifies them — with no camera or database required to run its test suite.

@@ -1,0 +1,10 @@
+# Development-only dependencies. Install with:
+#   pip install -r requirements-dev.txt
+# Production deps stay in requirements.txt.
+#
+# Kept in step with pyproject.toml's [project.optional-dependencies] dev extra —
+# CI gates on ruff and mypy, so both belong here.
+pytest>=8.0
+pytest-cov>=5.0
+ruff>=0.4.0
+mypy>=1.11

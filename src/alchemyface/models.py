@@ -124,17 +124,12 @@ def download(spec: ModelSpec, dest_dir: Path | str | None = None) -> Path:
                 shutil.copyfileobj(response, out, _CHUNK)
     except (urllib.error.URLError, OSError, ValueError) as exc:
         tmp.unlink(missing_ok=True)
-        raise ModelDownloadError(
-            f"could not download {spec.filename} from {spec.url}: {exc}"
-        ) from exc
+        raise ModelDownloadError(f"could not download {spec.filename} from {spec.url}: {exc}") from exc
 
     actual = sha256_of(tmp)
     if actual != spec.sha256:
         tmp.unlink(missing_ok=True)
-        raise ModelDownloadError(
-            f"checksum mismatch for {spec.filename}: "
-            f"expected {spec.sha256}, got {actual}"
-        )
+        raise ModelDownloadError(f"checksum mismatch for {spec.filename}: expected {spec.sha256}, got {actual}")
 
     destination = directory / spec.filename
     tmp.replace(destination)

@@ -91,15 +91,9 @@ def download_models(
 @app.command()
 def enroll(
     name: str = typer.Option(..., "--name", help="Label to store the face under."),
-    image: Path = typer.Option(
-        ..., "--image", exists=True, dir_okay=False, help="Photo containing one face."
-    ),
-    gallery: Path = typer.Option(
-        ..., "--gallery", help="Gallery .npz to create or extend."
-    ),
-    model_dir: Path | None = typer.Option(
-        None, "--model-dir", help="Directory holding the weights."
-    ),
+    image: Path = typer.Option(..., "--image", exists=True, dir_okay=False, help="Photo containing one face."),
+    gallery: Path = typer.Option(..., "--gallery", help="Gallery .npz to create or extend."),
+    model_dir: Path | None = typer.Option(None, "--model-dir", help="Directory holding the weights."),
 ) -> None:
     """Add the most prominent face in an image to a gallery."""
     recognizer = _build_recognizer(model_dir=model_dir)
@@ -115,9 +109,7 @@ def enroll(
 
 @app.command()
 def identify(
-    image: Path = typer.Option(
-        ..., "--image", exists=True, dir_okay=False, help="Image to search."
-    ),
+    image: Path = typer.Option(..., "--image", exists=True, dir_okay=False, help="Image to search."),
     gallery: Path = typer.Option(
         ...,
         "--gallery",
@@ -125,12 +117,8 @@ def identify(
         dir_okay=False,
         help="Gallery .npz to search against.",
     ),
-    threshold: float = typer.Option(
-        DEFAULT_THRESHOLD, "--threshold", help="Cosine score required to accept."
-    ),
-    model_dir: Path | None = typer.Option(
-        None, "--model-dir", help="Directory holding the weights."
-    ),
+    threshold: float = typer.Option(DEFAULT_THRESHOLD, "--threshold", help="Cosine score required to accept."),
+    model_dir: Path | None = typer.Option(None, "--model-dir", help="Directory holding the weights."),
 ) -> None:
     """Report who each face in an image looks like."""
     recognizer = _build_recognizer(model_dir=model_dir, threshold=threshold)
@@ -145,10 +133,7 @@ def identify(
         if recognition.match is None:
             typer.echo(f"unknown          at ({x},{y},{w},{h})")
         else:
-            typer.echo(
-                f"{recognition.match.label:<16} at ({x},{y},{w},{h}) "
-                f"score={recognition.match.score:.3f}"
-            )
+            typer.echo(f"{recognition.match.label:<16} at ({x},{y},{w},{h}) score={recognition.match.score:.3f}")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -78,9 +78,7 @@ def test_release_is_idempotent(stub: StubCapture) -> None:
 
 
 def test_a_camera_that_will_not_open_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        capture.cv2, "VideoCapture", lambda source: StubCapture(opens=False)
-    )
+    monkeypatch.setattr(capture.cv2, "VideoCapture", lambda source: StubCapture(opens=False))
     with pytest.raises(RuntimeError, match="could not open"):
         VideoSource(source=7)
 
