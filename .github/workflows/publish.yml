@@ -61,6 +61,10 @@ jobs:
     needs: [verify]
     runs-on: ubuntu-latest
     permissions:
+      # Declaring any permission replaces the whole default set, so contents
+      # must be granted back explicitly — without it checkout cannot see a
+      # private repository and fails with "Repository not found".
+      contents: read
       id-token: write  # required for PyPI trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v7
