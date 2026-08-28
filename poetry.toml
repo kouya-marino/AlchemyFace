@@ -1,0 +1,12 @@
+# The interpreter and virtualenv both come from pyenv (see .python-version).
+#
+# Poetry must NOT create a venv of its own, and it only sees the pyenv one when
+# VIRTUAL_ENV is exported — `pyenv local` activates through shims and never sets
+# it. Without that, Poetry silently installs into its own interpreter
+# (Homebrew's python@3.14). The Makefile exports VIRTUAL_ENV for every target,
+# so `make install` / `make test` are correct regardless of shell setup.
+#
+# Running poetry by hand outside make:
+#   export VIRTUAL_ENV="$(pyenv prefix alchemyface)"
+[virtualenvs]
+create = false

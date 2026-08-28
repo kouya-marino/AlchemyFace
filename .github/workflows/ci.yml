@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  POETRY_VERSION: "2.4.1"
+
+jobs:
+  identity:
+    name: Commit identity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the guard inspects the whole history, not just the tip
+
+      # A repo-local git config does not travel with a clone, so a checkout on
+      # another machine inherits that machine's global identity. This is the
+      # only check that catches it, and it runs before anything can merge.
+      - name: Reject unexpected commit identities
+        run: |
+          ALLOWED='prashantrawatmailbox@gmail.com'
+          BAD=$(git log --format='%ae%n%ce' | sort -u | grep -vx "$ALLOWED" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::commit identities other than ${ALLOWED} found:"
+            printf '  %s\n' $BAD
+            exit 1
+          fi
+          echo "every commit is authored and committed by ${ALLOWED}"
+
+  test:
+    name: test py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Poetry is configured with virtualenvs.create = false, so it installs
+      # into whatever VIRTUAL_ENV points at. Without this it would install into
+      # pipx's own interpreter and the matrix would silently test one version.
+      - name: Create a virtualenv on the matrix interpreter
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - name: Cache Poetry artefacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+
+      - name: Confirm the interpreter is the matrix one
+        run: |
+          python -c "import sys; print(sys.version)"
+          python -c "import sys; assert sys.version.startswith('${{ matrix.python-version }}'), sys.version"
+
+      - run: make install
+      - run: make check_formatted
+      - run: make check_type
+      - run: make lint
+      - run: make test
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Create a virtualenv
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      - run: make install
+      - run: make build
+
+      # The repository holds face embeddings and voice recordings of real
+      # people under _local/. They are git-ignored and excluded from the sdist,
+      # but this fails the build rather than trusting that twice over.
+      - name: Refuse to ship personal data
+        run: |
+          LISTING=$(mktemp)
+          unzip -l dist/*.whl >> "$LISTING"
+          tar tzf dist/*.tar.gz >> "$LISTING"
+          if grep -iE '_local|face_data|sounds|id2map|eventlog|\.npy|\.npz|\.onnx|\.mp3|\.pt$' "$LISTING"; then
+            echo "::error::the distribution contains personal data or model weights"
+            exit 1
+          fi
+          echo "distribution is clean"
+
+      - name: Verify the wheel imports and the CLI runs
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/python -c "import alchemyface; print('import OK', alchemyface.__version__)"
+          /tmp/smoke/bin/alchemyface version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/

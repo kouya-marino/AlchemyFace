@@ -1,0 +1,107 @@
+name: Release
+
+# Publishing is irreversible: PyPI never allows re-uploading a version, and a
+# yanked release still occupies its number forever. Everything below runs
+# before the upload so a broken release fails loudly rather than shipping.
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  POETRY_VERSION: "2.4.1"
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject unexpected commit identities
+        run: |
+          ALLOWED='prashantrawatmailbox@gmail.com'
+          BAD=$(git log --format='%ae%n%ce' | sort -u | grep -vx "$ALLOWED" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::commit identities other than ${ALLOWED} found:"
+            printf '  %s\n' $BAD
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Create a virtualenv
+        run: |
+          python -m venv .venv
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install Poetry
+        run: pipx install "poetry==${POETRY_VERSION}"
+
+      # A tag that disagrees with pyproject.toml would publish a version nobody
+      # can reproduce from the tag. Catch it before anything is built.
+      - name: Tag must match the declared version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION="$(poetry version --short)"
+          echo "tag=${TAG}  pyproject=${VERSION}"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::tag v${TAG} does not match pyproject.toml version ${VERSION}"
+            exit 1
+          fi
+
+      - name: A licence is required before publishing
+        run: |
+          if ! grep -qE '^license' pyproject.toml && [ ! -f LICENSE ]; then
+            echo "::error::no licence declared. Add a LICENSE file and a license field to pyproject.toml."
+            exit 1
+          fi
+
+      - run: make install
+      - run: make check_formatted
+      - run: make check_type
+      - run: make lint
+      - run: make test
+      - run: make build
+
+      - name: Refuse to ship personal data
+        run: |
+          LISTING=$(mktemp)
+          unzip -l dist/*.whl >> "$LISTING"
+          tar tzf dist/*.tar.gz >> "$LISTING"
+          if grep -iE '_local|face_data|sounds|id2map|eventlog|\.npy|\.npz|\.onnx|\.mp3|\.pt$' "$LISTING"; then
+            echo "::error::the distribution contains personal data or model weights"
+            exit 1
+          fi
+          echo "distribution is clean"
+
+      - name: Validate distribution metadata
+        run: poetry run python -m twine check dist/*
+
+      - name: Verify the wheel imports before publishing it
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/python -c "import alchemyface; print(alchemyface.__version__)"
+          /tmp/smoke/bin/alchemyface version
+
+      - name: Publish to PyPI
+        env:
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "${POETRY_PYPI_TOKEN_PYPI}" ]; then
+            echo "::error::secret PYPI_API_TOKEN is not set on this repository"
+            exit 1
+          fi
+          poetry publish --no-interaction
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/

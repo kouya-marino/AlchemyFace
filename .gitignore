@@ -1,0 +1,84 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# BIOMETRIC / PERSONAL DATA — NEVER COMMIT
+#
+# _local/ holds face embeddings, name recordings and captured images of real,
+# identifiable people. Under APPI (Japan) and GDPR Art. 9 these are sensitive
+# personal data. They exist here for local development and test fixtures only.
+#
+# Do not add exceptions below this block. Do not `git add -f` anything in it.
+# ─────────────────────────────────────────────────────────────────────────────
+_local/
+
+# Belt and braces: these names are ignored wherever they appear, in case
+# someone reintroduces them at the repo root out of old habit.
+face_data/
+recorded_faces/
+person_picture/
+old_data/
+sounds/
+**/id2map*.csv
+**/eventlog*.csv
+*.npy
+*.npz
+
+# Model weights — resolved at runtime into ~/.cache/alchemyface/models/
+onnx/
+*.onnx
+*.pt
+
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+sdist/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ─── Environments ────────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# ─── Testing / coverage ──────────────────────────────────────────────────────
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.cache
+
+# ─── Type checkers & linters ─────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ─── Docs ────────────────────────────────────────────────────────────────────
+/site
+
+# ─── Editors / OS ────────────────────────────────────────────────────────────
+.idea/
+*.code-workspace
+.history
+.DS_Store
+._*
