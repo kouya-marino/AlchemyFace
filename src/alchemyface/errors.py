@@ -19,3 +19,7 @@ class ModelDownloadError(AlchemyFaceError):
 
 class NoFaceDetectedError(AlchemyFaceError):
     """An operation required a face and the image had none."""
+
+
+class PickleSchemaError(AlchemyFaceError):
+    """A pickle did not hold a recognisable face database."""

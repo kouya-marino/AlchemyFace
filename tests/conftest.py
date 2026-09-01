@@ -21,3 +21,17 @@ def model_dir() -> Path:
     if not path.is_dir():
         pytest.skip(f"model directory does not exist: {path}")
     return path
+
+
+@pytest.fixture(scope="session")
+def pkl_dir() -> Path:
+    """Directory of real .pkl face databases, or skip.
+
+    These are production databases holding real people's embeddings, so they
+    live in the git-ignored _local/ tree and are never committed. Tests using
+    them assert on counts and shapes, never on names.
+    """
+    path = Path(__file__).resolve().parent.parent / "_local" / "pkl"
+    if not path.is_dir():
+        pytest.skip(f"pkl fixtures not present: {path}")
+    return path

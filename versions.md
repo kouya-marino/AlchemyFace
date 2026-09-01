@@ -24,25 +24,26 @@ Face detection and recognition as a typed, dependency-light library.
 - `VideoSource`; CLI with `download-models`, `enroll`, `identify`, `version`.
 - 88 tests, 91% coverage. Published to PyPI.
 
----
-
-## Planned
-
-### 0.2.0 — library groundwork for the app
+### 0.2.0 — library groundwork for the app · 2026-09-01
 
 No GUI. Two additions the app needs, both useful on their own.
 
-- `SFaceEmbedder(normalize=False)` — raw SFace output, L2 ≈ 10. The robot's
-  `.pkl` schema stores unnormalised vectors; cosine is scale-invariant so
-  matching is unaffected, but raw keeps new databases comparable with existing
-  ones and keeps the `L2 norm` column meaningful.
+- `SFaceEmbedder(normalize=False)` — raw SFace output, L2 ≈ 10.
 - `PickleStore` — the robot's `list[(id, name, group, vector)]` format as a
-  real `FaceStore`, reading the back-compatible `{name: vector}` dict too.
+  real `FaceStore`, storing vectors verbatim and normalising inside `search`.
 - `PickleSchemaError` so malformed input reports a reason.
 
-**Done when:** a `.pkl` written by `PickleStore` loads in the original app's
-Inspect tab, and one written by the original app loads here, byte-identical
-vectors both ways.
+**Verified:** all three production databases load byte-identically to the
+original app's reader, and a database written by `PickleStore` loads back in
+that app with its vectors intact. 123 tests, 91% coverage.
+
+Reading is deliberately forgiving — the production files disagree with their own
+documented schema (`id` is `int` in one and `str` in two; vectors are
+`(1, 128)` in one and `(128,)` in two).
+
+---
+
+## Planned
 
 ### 0.3.0 — GUI shell and Inspect DB
 

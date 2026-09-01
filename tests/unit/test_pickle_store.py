@@ -1,0 +1,308 @@
+"""PickleStore: the robot's list[(id, name, group, vector)] pickle as a FaceStore.
+
+Two things separate it from InMemoryStore and both are deliberate:
+
+- It stores vectors **exactly as given**, unnormalised, because the robot's
+  databases hold raw SFace output and a round trip must not alter them.
+- It is forgiving on read. The three production databases disagree with their
+  own documented schema: `id` is int in one and str in two, and the vector is
+  (1, 128) in one and (128,) in two. A stricter reader would refuse a database
+  the robot loads today.
+"""
+
+from __future__ import annotations
+
+import pickle
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from alchemyface.errors import AlchemyFaceError, PickleSchemaError
+from alchemyface.store import PickleStore
+
+
+def raw(*values: float, scale: float = 10.0) -> np.ndarray:
+    """A vector with an SFace-like magnitude, not unit length."""
+    v = np.array(values, dtype=np.float32)
+    return (v / np.linalg.norm(v) * scale).astype(np.float32)
+
+
+def basis(i: int, dim: int = 4, scale: float = 10.0) -> np.ndarray:
+    v = np.zeros(dim, dtype=np.float32)
+    v[i] = scale
+    return v
+
+
+# --------------------------------------------------------------- basics
+
+
+def test_new_store_is_empty() -> None:
+    assert len(PickleStore(dim=4)) == 0
+
+
+def test_add_preserves_the_vector_exactly() -> None:
+    # The whole reason this store exists: no normalisation on the way in.
+    store = PickleStore(dim=4)
+    v = basis(0, scale=13.5)
+    store.add("ada", v, {"group": "staff"})
+    (stored,) = store.vectors()
+    np.testing.assert_array_equal(stored, v)
+    assert float(np.linalg.norm(stored)) == pytest.approx(13.5)
+
+
+def test_add_returns_unique_ids() -> None:
+    store = PickleStore(dim=4)
+    assert store.add("ada", basis(0)) != store.add("grace", basis(1))
+    assert len(store) == 2
+
+
+def test_group_travels_in_metadata() -> None:
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0), {"group": "ceo"})
+    (m,) = store.search(basis(0))
+    assert m.label == "ada"
+    assert m.metadata["group"] == "ceo"
+
+
+def test_missing_group_becomes_empty_string() -> None:
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0))
+    (m,) = store.search(basis(0))
+    assert m.metadata["group"] == ""
+
+
+# --------------------------------------------------------------- search
+
+
+def test_search_on_empty_store_returns_nothing() -> None:
+    assert PickleStore(dim=4).search(basis(0)) == []
+
+
+def test_search_ranks_correctly_despite_raw_vectors() -> None:
+    # Stored vectors have differing magnitudes; cosine must ignore that.
+    store = PickleStore(dim=4)
+    store.add("far", basis(1, scale=50.0))
+    store.add("near", raw(1.0, 0.1, 0.0, 0.0, scale=0.5))
+    store.add("middle", raw(1.0, 1.0, 0.0, 0.0, scale=99.0))
+    assert [m.label for m in store.search(basis(0), k=3)] == ["near", "middle", "far"]
+
+
+def test_exact_match_scores_one_regardless_of_scale() -> None:
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0, scale=13.0))
+    (m,) = store.search(basis(0, scale=2.0))
+    assert m.score == pytest.approx(1.0)
+
+
+def test_orthogonal_scores_zero() -> None:
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0))
+    (m,) = store.search(basis(1))
+    assert m.score == pytest.approx(0.0)
+
+
+def test_remove_drops_the_entry() -> None:
+    store = PickleStore(dim=4)
+    eid = store.add("ada", basis(0))
+    store.add("grace", basis(1))
+    store.remove(eid)
+    assert len(store) == 1
+    assert [m.label for m in store.search(basis(1), k=5)] == ["grace"]
+
+
+def test_remove_unknown_id_raises() -> None:
+    with pytest.raises(KeyError):
+        PickleStore(dim=4).remove("nope")
+
+
+# --------------------------------------------------------------- round trip
+
+
+def test_save_load_round_trip_is_lossless(tmp_path: Path) -> None:
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0, scale=11.0), {"group": "ceo"})
+    store.add("grace", basis(1, scale=12.0), {"group": "staff"})
+    p = tmp_path / "db.pkl"
+    store.save(p)
+
+    back = PickleStore(dim=4)
+    back.load(p)
+    assert len(back) == 2
+    np.testing.assert_array_equal(back.vectors()[0], basis(0, scale=11.0))
+    labels = [m.label for m in back.search(basis(0), k=2)]
+    assert labels[0] == "ada"
+
+
+def test_save_writes_the_robot_schema(tmp_path: Path) -> None:
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0), {"group": "staff"})
+    p = tmp_path / "db.pkl"
+    store.save(p)
+
+    with open(p, "rb") as f:
+        data = pickle.load(f)
+    assert isinstance(data, list)
+    (entry,) = data
+    assert isinstance(entry, tuple) and len(entry) == 4
+    eid, name, group, vec = entry
+    assert isinstance(eid, str)
+    assert (name, group) == ("ada", "staff")
+    assert isinstance(vec, np.ndarray)
+    assert vec.dtype == np.float32
+    assert vec.ndim == 1
+
+
+def test_save_renumbers_ids_from_zero(tmp_path: Path) -> None:
+    store = PickleStore(dim=4)
+    for i in range(3):
+        store.add(f"p{i}", basis(i % 4))
+    p = tmp_path / "db.pkl"
+    store.save(p)
+    with open(p, "rb") as f:
+        data = pickle.load(f)
+    assert [e[0] for e in data] == ["0", "1", "2"]
+
+
+def test_save_of_empty_store_round_trips(tmp_path: Path) -> None:
+    p = tmp_path / "empty.pkl"
+    PickleStore(dim=4).save(p)
+    back = PickleStore(dim=4)
+    back.load(p)
+    assert len(back) == 0
+
+
+def test_load_replaces_rather_than_appends(tmp_path: Path) -> None:
+    src = PickleStore(dim=4)
+    src.add("ada", basis(0))
+    p = tmp_path / "db.pkl"
+    src.save(p)
+
+    dst = PickleStore(dim=4)
+    dst.add("grace", basis(1))
+    dst.load(p)
+    assert len(dst) == 1
+    assert dst.search(basis(0))[0].label == "ada"
+
+
+# --------------------------------------- real-world schema variations
+
+
+def write_raw(path: Path, data: object) -> None:
+    with open(path, "wb") as f:
+        pickle.dump(data, f)
+
+
+def test_load_accepts_int_ids(tmp_path: Path) -> None:
+    # face_data_26_08_2025_paloma.pkl stores ints.
+    p = tmp_path / "int_ids.pkl"
+    write_raw(p, [(0, "ada", "ceo", basis(0)), (1, "grace", "staff", basis(1))])
+    store = PickleStore(dim=4)
+    store.load(p)
+    assert len(store) == 2
+    assert store.search(basis(0))[0].label == "ada"
+
+
+def test_load_accepts_nested_1xN_vectors(tmp_path: Path) -> None:
+    # face_data_26_08_2025_paloma.pkl stores (1, 128), not (128,).
+    p = tmp_path / "nested.pkl"
+    write_raw(p, [("0", "ada", "ceo", basis(0).reshape(1, 4))])
+    store = PickleStore(dim=4)
+    store.load(p)
+    assert store.vectors()[0].shape == (4,)
+    assert store.search(basis(0))[0].label == "ada"
+
+
+def test_load_accepts_the_dict_form(tmp_path: Path) -> None:
+    p = tmp_path / "dict.pkl"
+    write_raw(p, {"ada": basis(0), "grace": basis(1)})
+    store = PickleStore(dim=4)
+    store.load(p)
+    assert len(store) == 2
+    (m,) = store.search(basis(0))
+    assert m.label == "ada"
+    assert m.metadata["group"] == ""
+
+
+def test_load_infers_dimension_from_the_file(tmp_path: Path) -> None:
+    p = tmp_path / "eight.pkl"
+    write_raw(p, [("0", "ada", "", np.arange(8, dtype=np.float32))])
+    store = PickleStore(dim=4)  # constructed for 4, file holds 8
+    store.load(p)
+    assert store.dim == 8
+
+
+# --------------------------------------------------------------- errors
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        42,
+        "not a db",
+        [("0", "ada", "staff")],  # tuple too short
+        [("0", "ada", "staff", basis(0), "extra")],  # tuple too long
+        [["0", "ada", "staff", basis(0)]],  # list, not tuple
+        [("0", "ada", "staff", "not a vector")],  # unconvertible vector
+    ],
+)
+def test_load_rejects_malformed_payloads(tmp_path: Path, payload: object) -> None:
+    p = tmp_path / "bad.pkl"
+    write_raw(p, payload)
+    with pytest.raises(PickleSchemaError):
+        PickleStore(dim=4).load(p)
+
+
+def test_load_rejects_mixed_dimensions(tmp_path: Path) -> None:
+    p = tmp_path / "mixed.pkl"
+    # Non-zero, or the zero-vector check fires first and masks this one.
+    write_raw(
+        p,
+        [
+            ("0", "ada", "", basis(0, dim=4)),
+            ("1", "grace", "", basis(0, dim=8)),
+        ],
+    )
+    with pytest.raises(PickleSchemaError, match="dimension"):
+        PickleStore(dim=4).load(p)
+
+
+def test_load_rejects_a_zero_vector(tmp_path: Path) -> None:
+    p = tmp_path / "zero.pkl"
+    write_raw(p, [("0", "ada", "", np.zeros(4, dtype=np.float32))])
+    with pytest.raises(PickleSchemaError, match="zero"):
+        PickleStore(dim=4).load(p)
+
+
+def test_load_of_a_non_pickle_raises_schema_error(tmp_path: Path) -> None:
+    p = tmp_path / "notapickle.pkl"
+    p.write_bytes(b"this is not a pickle")
+    with pytest.raises(PickleSchemaError):
+        PickleStore(dim=4).load(p)
+
+
+def test_schema_error_is_an_alchemyface_error() -> None:
+    assert issubclass(PickleSchemaError, AlchemyFaceError)
+
+
+# ------------------------------------------- the real production files
+
+
+def test_real_databases_load(pkl_dir: Path) -> None:
+    """The three production databases must load, with the counts we measured."""
+    expected = {
+        "face_data_26_08_2025_paloma.pkl": 53,
+        "face_db_20260511_check.pkl": 30,
+        "face_db_test.pkl": 7,
+    }
+    for name, count in expected.items():
+        path = pkl_dir / name
+        if not path.is_file():
+            pytest.skip(f"fixture missing: {name}")
+        store = PickleStore()
+        store.load(path)
+        assert len(store) == count, name
+        assert store.dim == 128, name
+        # Every one stores raw vectors — that is why normalize=False exists.
+        norms = [float(np.linalg.norm(v)) for v in store.vectors()]
+        assert min(norms) > 2.0, f"{name}: vectors look normalised"

@@ -18,11 +18,12 @@ from alchemyface.errors import (
     ModelDownloadError,
     ModelNotFoundError,
     NoFaceDetectedError,
+    PickleSchemaError,
 )
 from alchemyface.pipeline import DEFAULT_THRESHOLD, Recognizer
 from alchemyface.types import Face, Match, Recognition
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "AlchemyFaceError",
@@ -32,6 +33,7 @@ __all__ = [
     "ModelDownloadError",
     "ModelNotFoundError",
     "NoFaceDetectedError",
+    "PickleSchemaError",
     "Recognition",
     "Recognizer",
     "__version__",
