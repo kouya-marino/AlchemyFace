@@ -10,11 +10,12 @@ from __future__ import annotations
 import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 from typing import Callable, Literal
 
 from alchemyface.errors import AlchemyFaceError
 from alchemyface.gui.inspect_data import entry_rows, summarise
+from alchemyface.gui.reporting import DialogReporter, Reporter
 from alchemyface.store import PickleStore
 
 Anchor = Literal["nw", "n", "ne", "w", "center", "e", "sw", "s", "se"]
@@ -46,9 +47,16 @@ class InspectView(ttk.Frame):
     )
     COLUMNS = tuple(spec.key for spec in COLUMN_SPECS)
 
-    def __init__(self, parent: tk.Misc, *, on_status: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        on_status: Callable[[str], None],
+        reporter: Reporter | None = None,
+    ) -> None:
         super().__init__(parent)
         self._set_status = on_status
+        self._reporter: Reporter = reporter or DialogReporter()
         self._path_var = tk.StringVar(value="")
         self._summary_var = tk.StringVar(value="No file loaded.")
         self._store: PickleStore | None = None
@@ -119,7 +127,7 @@ class InspectView(ttk.Frame):
         self._summary_var.set(f"Load failed: {reason}")
         self._set_status(f"Inspect failed: {reason}")
         self._clear()
-        messagebox.showerror("Load failed", reason)
+        self._reporter.error("Load failed", reason)
         return False
 
     def _clear(self) -> None:

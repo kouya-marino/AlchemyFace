@@ -35,9 +35,10 @@ def test_window_opens_with_a_title_and_the_version(app) -> None:  # type: ignore
     assert __version__ in app.title()
 
 
-def test_only_the_implemented_tab_is_present(app) -> None:  # type: ignore[no-untyped-def]
-    # Tabs arrive one version at a time; no dead placeholders.
-    assert app.tab_labels() == ["Inspect DB"]
+def test_only_the_implemented_tabs_are_present(app) -> None:  # type: ignore[no-untyped-def]
+    # Tabs arrive one version at a time; no dead placeholders. Edit and Resize
+    # are not here yet and must not appear until they work.
+    assert app.tab_labels() == ["Build DB", "Inspect DB"]
 
 
 def test_status_starts_ready_and_can_be_set(app) -> None:  # type: ignore[no-untyped-def]
@@ -101,11 +102,7 @@ def test_a_second_load_replaces_the_first(app, tmp_path: Path) -> None:  # type:
     assert app.inspect_view.row_count() == 1
 
 
-def test_missing_file_reports_and_clears(app, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    from alchemyface.gui import inspect_view as module
-
-    # The failure path shows a modal; silence it so the test does not block.
-    monkeypatch.setattr(module.messagebox, "showerror", lambda *a, **k: None)
+def test_missing_file_reports_and_clears(app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     good = tmp_path / "db.pkl"
     sample_db(good, count=2)
     app.inspect_view.load(good)
@@ -115,19 +112,14 @@ def test_missing_file_reports_and_clears(app, tmp_path: Path, monkeypatch) -> No
     assert "does not exist" in app.inspect_view.summary_text
 
 
-def test_malformed_pickle_reports_the_reason(app, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    from alchemyface.gui import inspect_view as module
-
-    captured: list[str] = []
-    monkeypatch.setattr(module.messagebox, "showerror", lambda _t, msg, **k: captured.append(msg))
+def test_malformed_pickle_reports_the_reason(app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     bad = tmp_path / "bad.pkl"
     bad.write_bytes(b"not a pickle at all")
     assert app.inspect_view.load(bad) is False
-    assert captured, "no error dialog was raised"
-    assert "pickle" in captured[0].lower()
+    assert app.reporter.errors, "nothing was reported"
+    assert "pickle" in app.reporter.last_error.lower()
 
 
-@pytest.mark.models
 def test_a_real_production_database_loads(app, pkl_dir: Path) -> None:  # type: ignore[no-untyped-def]
     """End to end on a real robot database. Counts only — never names."""
     path = pkl_dir / "face_db_20260511_check.pkl"
