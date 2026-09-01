@@ -10,6 +10,12 @@ Design: [`docs/superpowers/specs/2026-08-28-alchemyface-design.md`](docs/superpo
 Every version below is a branch → pull request → review → merge → tag.
 Each one leaves the project working and independently publishable.
 
+**Every version that changes what a user can do updates `README.md` in the same
+pull request.** The README is the PyPI project page, so deferring it means
+publishing a description that is wrong. 0.2.0 through 0.4.0 shipped with a
+README still describing a library-only package — it had been scheduled for
+1.0.0, which was a mistake.
+
 ---
 
 ## Shipped
@@ -114,7 +120,7 @@ range.
 ### 1.0.0 — parity and polish
 
 - Behaviour audit against the original app, tab by tab.
-- README rewritten to cover library *and* app; screenshots.
+- Screenshots for the README (its prose is kept current per version, not here).
 - Docstring and typing pass over the GUI; coverage back above 80% overall.
 - `todo.md` emptied of anything blocking, or its remainder deferred explicitly.
 

@@ -1,28 +1,30 @@
 # AlchemyFace
 
+![coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)
 [![PyPI](https://img.shields.io/pypi/v/alchemyface.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
-Face detection and recognition built on [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
-and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface).
-Small, typed, and dependency-light: OpenCV, NumPy, Typer. Nothing else.
-
-## Why
-
-Most Python face-recognition libraries pull in dlib, PyTorch or TensorFlow.
-AlchemyFace uses two small ONNX models through OpenCV's own DNN runtime, so a
-working install is a few megabytes of Python and about 37 MB of weights fetched
-once, on first use.
-
-## Install
+Face recognition built on [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
+and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) —
+**a typed Python library and a desktop application for building face databases.**
 
 ```bash
 pip install alchemyface
+alchemyface db          # the Face DB Builder
 ```
 
-## Use
+## Why
+
+Most Python face-recognition packages pull in dlib, PyTorch or TensorFlow.
+AlchemyFace uses two small ONNX models through OpenCV's own DNN runtime: a
+working install is a few megabytes of Python plus about 37 MB of weights fetched
+once, on first use.
+
+---
+
+# The library
 
 ```python
 import cv2
@@ -41,33 +43,47 @@ for recognition in r.identify(cv2.imread("group.jpg")):
         print(f"unknown face at {face.bbox}")
 ```
 
-Enrolled faces live in memory. Persist them when you are done:
+`identify` returns one `Recognition` per detected face. `match` is `None` when
+nothing clears the threshold — the library never invents a label.
+
+### Galleries
+
+`Recognizer` is a facade over three protocols — `Detector`, `Embedder` and
+`FaceStore` — so any conforming object can be substituted.
+
+| Store | |
+|---|---|
+| `InMemoryStore` | numpy matrix, unit vectors, `.npz` save/load. The default. |
+| `PickleStore` | the Unitree G1 robot's `list[(id, name, group, vector)]` pickle. Stores vectors **verbatim**. |
 
 ```python
-r.store.save("gallery.npz")
-r.store.load("gallery.npz")
+from alchemyface.store import PickleStore
+
+store = PickleStore()
+store.load("face_db.pkl")
+print(len(store), store.dim)
+for entry in store.entries():
+    print(entry.label, entry.group, entry.vector.shape)
 ```
 
-### Bring your own components
+### Raw versus unit embeddings
 
-`Recognizer` is a thin facade over three protocols — `Detector`, `Embedder` and
-`FaceStore`. Any object satisfying the protocol can be substituted, which is how
-a pgvector-backed store or a different embedding model will slot in later
-without touching the pipeline.
+`SFaceEmbedder` returns unit-length vectors by default, because the `Embedder`
+protocol promises it and the rest of the library relies on it. Pass
+`normalize=False` for SFace's raw output, whose L2 norm is around 10:
 
 ```python
-from alchemyface import Recognizer
-from alchemyface.detection import YuNetDetector
 from alchemyface.embedding import SFaceEmbedder
-from alchemyface.store import InMemoryStore
 
-r = Recognizer(
-    detector=YuNetDetector(score_threshold=0.8),
-    embedder=SFaceEmbedder(),
-    store=InMemoryStore(),
-    threshold=0.363,
-)
+SFaceEmbedder().embed(image, face)                    # L2 == 1
+SFaceEmbedder(normalize=False).embed(image, face)     # L2 ≈ 10, raw
 ```
+
+Cosine similarity is scale-invariant, so **matching is identical either way**.
+What differs is what lands on disk: the robot's schema stores raw values, and
+keeping them means a database written here stays comparable with one written by
+anything else, and the `L2 norm` column remains a useful diagnostic rather than
+reading `1.0000` for every entry.
 
 ### Live video
 
@@ -76,67 +92,125 @@ from alchemyface import Recognizer
 from alchemyface.capture import VideoSource
 
 r = Recognizer()
-r.store.load("gallery.npz")
-
 with VideoSource(0, width=1280, height=720) as camera:
     for frame in camera.frames():
         for recognition in r.identify(frame):
-            match = recognition.match
-            print(match.label if match else "unknown", recognition.face.bbox)
+            print(recognition.match.label if recognition.match else "unknown")
 ```
 
-### CLI
+---
+
+# The application
 
 ```bash
-alchemyface download-models          # pre-fetch weights
-alchemyface enroll  --name prashant --image me.jpg --gallery g.npz
-alchemyface identify --image group.jpg --gallery g.npz
+alchemyface db
 ```
+
+A Tkinter desktop app that turns folders of photos into a `.pkl` face database.
+
+### Build DB
+
+Three panes: image sidebar, the current image with numbered face boxes, and one
+panel per face.
+
+1. Choose an input folder and click **Open**. Every image is detected in the
+   background, the one on screen first, so the sidebar fills in as you work.
+2. Each detected face becomes a numbered box on the canvas and a row on the
+   right — thumbnail, **Include**, **Name**, **Group**. Names default to the
+   filename, or `<stem>_faceN` when an image holds several.
+3. Untick **Include** to drop a face; its box turns dashed.
+4. Click a box to select that face. **Re-detect** runs YuNet again, asking first
+   if you have unsaved edits.
+5. **Save .pkl** writes every included, named face, computing any embedding not
+   already cached and renumbering ids from `"0"`.
+
+Sidebar glyphs: `·` pending · `⚠` no face · `○ (0/N)` nothing included ·
+`✓ (k/N)` k of N included.
+
+### Inspect DB
+
+Read-only viewer for any database: `ID · Name · Group · Dim · L2 norm · first
+values`, with a summary line of counts, dimension and file size. Reads the
+four-tuple list form and the back-compatible `{name: vector}` dict.
+
+*Edit DB and Resize are planned — see [versions.md](versions.md).*
+
+### The `.pkl` schema
+
+```python
+[
+    ("0", "Alice", "staff",   np.ndarray(shape=(128,), dtype=float32)),
+    ("1", "Bob",   "visitor", np.ndarray(shape=(128,), dtype=float32)),
+]
+```
+
+Reading is deliberately forgiving. Real databases disagree with this
+documentation — `id` is sometimes an `int`, and the vector sometimes `(1, 128)` —
+so both are coerced. A stricter reader would refuse a database that works today.
+
+---
+
+## Requirements
+
+`opencv-python-headless`, `numpy`, `typer`, `Pillow`. Python 3.10 or newer.
+
+**The GUI needs `tkinter`, but the library does not.** Nothing in the library
+imports it, so `import alchemyface` works on a server, in Docker, or in CI with
+no Tk installed — enforced by tests, not hoped for. `alchemyface db` reports what
+to install rather than raising:
+
+```
+$ alchemyface db
+the desktop application needs tkinter, which is not available: No module named '_tkinter'
+  Debian/Ubuntu:  sudo apt-get install python3-tk
+  Fedora:         sudo dnf install python3-tkinter
+```
+
+The presentation helpers are Tk-free too, so you can render a database in a web
+app or a notebook:
+
+```python
+from alchemyface.gui.inspect_data import entry_rows, summarise
+```
+
+OpenCV is the **headless** build, so there is no `libGL` requirement either.
 
 ## Model weights
 
-Weights are resolved in this order, first hit wins:
+Resolved in this order, first hit wins:
 
 1. `model_dir=` passed to `Recognizer`
 2. `$ALCHEMYFACE_MODEL_DIR`
 3. `~/.cache/alchemyface/models/`
 4. downloaded from the OpenCV Zoo and SHA256-verified
 
-To work fully offline, point at a directory you already have:
-
-```bash
-export ALCHEMYFACE_MODEL_DIR=/path/to/onnx
-```
+`alchemyface download-models` pre-fetches. Set `ALCHEMYFACE_MODEL_DIR` to work
+offline.
 
 ## The recognition threshold
 
-The default cosine threshold is `0.363`, SFace's published operating point:
-above it, two embeddings are treated as the same person. Raise it for fewer
-false accepts, lower it for fewer false rejects. It is a tunable, not a
-constant — validate it against your own data before relying on it.
+The library defaults to cosine `0.363`, SFace's published operating point. The
+G1 robot matches at `0.32`. It is a tunable, not a constant — validate it against
+your own data.
 
 ## Development
 
-Requires [`pyenv`](https://github.com/pyenv/pyenv) with
-[`pyenv-virtualenv`](https://github.com/pyenv/pyenv-virtualenv).
-
 ```bash
-pyenv install 3.10.6                      # if not already present
-pyenv virtualenv 3.10.6 alchemyface       # .python-version activates it here
+pyenv install 3.10.6
+pyenv virtualenv 3.10.6 alchemyface     # .python-version activates it here
 pip install -e ".[dev]"
 ```
 
-| Command | Does |
+| Command | |
 |---|---|
-| `pytest tests/ -m "not models and not camera"` | the fast suite — no models, camera or network |
-| `pytest tests/ -m "not camera"` | adds the tests that load the real ONNX weights |
-| `ruff check src tests` | lint |
-| `ruff format src tests` | format |
+| `pytest tests/ -m "not models and not camera and not gui"` | the fast suite — no display, no models, no network |
+| `pytest tests/ -m "gui"` | needs a display; `xvfb-run -a` on a headless box |
+| `pytest tests/ -m "not camera"` | everything except the camera |
+| `ruff check src tests` · `ruff format src tests` | lint and format |
 | `mypy src/alchemyface` | type check |
-| `python -m build` | build the wheel and sdist |
+| `python -m build` | wheel and sdist |
 
-Tests that need the real weights are marked `models` and skip unless
-`ALCHEMYFACE_MODEL_DIR` points at a directory containing them:
+Model-backed tests skip unless the weights are present:
 
 ```bash
 export ALCHEMYFACE_MODEL_DIR="$PWD/_local/onnx"
@@ -144,17 +218,23 @@ export ALCHEMYFACE_MODEL_DIR="$PWD/_local/onnx"
 
 ## A note on data
 
-This repository contains a `_local/` directory that is **git-ignored and must
-stay that way**. It holds face embeddings, name recordings and captured images
-of real, identifiable people, carried over from the internal prototype this
-library grew out of. Under Japan's APPI and GDPR Article 9 those are sensitive
-personal data. They are development fixtures only: they are excluded from the
-wheel, the sdist and version control, and they must never be published.
+`_local/` is **git-ignored and must stay that way**. It holds face embeddings,
+recordings and photographs of real, identifiable people, carried over from the
+prototype this grew out of. Under Japan's APPI and GDPR Article 9 those are
+sensitive personal data. They are development fixtures: excluded from the wheel,
+the sdist and version control, and a CI step fails the build if any of them ever
+reach a distribution.
+
+## Links
+
+- [CHANGELOG.md](CHANGELOG.md) — what shipped, per release
+- [versions.md](versions.md) — the roadmap
+- [todo.md](todo.md) — what is next
 
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
 
-The ONNX weights are distributed by the [OpenCV Zoo](https://github.com/opencv/opencv_zoo)
-under their own terms — YuNet under MIT, SFace under Apache-2.0 — and are
-downloaded at runtime rather than redistributed here.
+Model weights are distributed by the [OpenCV Zoo](https://github.com/opencv/opencv_zoo)
+under their own terms — YuNet MIT, SFace Apache-2.0 — and are downloaded at
+runtime rather than redistributed here.

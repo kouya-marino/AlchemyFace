@@ -6,6 +6,10 @@ Actionable work, grouped by the version it belongs to. `versions.md` explains
 Convention: one branch and one pull request per version. Tick items as they
 merge, not as they are written.
 
+**Every version updates `README.md` in its own pull request.** It is the PyPI
+project page; 0.2.0-0.4.0 shipped with a stale one because it was scheduled for
+1.0.0 instead.
+
 ---
 
 ## Done — 0.2.0 · library groundwork
@@ -83,17 +87,19 @@ merge, not as they are written.
 - [x] Save flow with name validation and on-demand embedding fill-in.
 
 ### 0.5.0 · Edit DB — NEXT
+- [ ] Update `README.md` for what this version adds.
 - [ ] Port `edit_db_view.py` onto `PickleStore` — drop the duplicated
       `_normalize_db`.
 - [ ] Unsaved-changes tracking and close confirmation.
 
 ### 0.6.0 · Resize
+- [ ] Update `README.md` for what this version adds.
 - [ ] Port `resize_util.py` and `resize_view.py`.
 - [ ] `alchemyface resize` CLI subcommand replacing the hardcoded script.
 
 ### 1.0.0 · Parity and polish
 - [ ] Tab-by-tab audit against the original.
-- [ ] README covering library and app; screenshots.
+- [ ] Screenshots for the README (prose kept current per version).
 - [ ] Coverage back above 80% with the GUI included.
 
 ---

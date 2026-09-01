@@ -9,6 +9,25 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.4.1] — 2026-09-01
+
+Documentation only. No code changes.
+
+### Fixed
+
+- **`README.md` described a library-only package.** It had not been touched
+  since before 0.2.0, so three releases went to PyPI — where the README *is* the
+  project page — with no mention of the desktop application, `PickleStore`,
+  `normalize=False`, or the `.pkl` schema. It also claimed the dependencies were
+  "OpenCV, NumPy, Typer. Nothing else", which stopped being true when Pillow was
+  added in 0.3.0.
+- The rewrite covers the library and the app, states the real dependencies,
+  explains that the library never imports `tkinter` while the GUI needs it, and
+  documents raw versus unit embeddings. Every code example in it was executed
+  against the real models before publishing.
+- `versions.md` and `todo.md` now require a README update in each version's own
+  pull request. Scheduling it for 1.0.0 was the mistake that caused this.
+
 ## [0.4.0] — 2026-09-01
 
 The Build DB tab: a folder of photos becomes a database the robot can load.
@@ -163,7 +182,8 @@ First release. Extracted from an earlier prototype into a typed, installable lib
 - 88 tests at 91% coverage. The default suite needs no models, camera or
   network; model-backed tests are marked and skip when weights are absent.
 
-[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.2.0
