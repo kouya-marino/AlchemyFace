@@ -299,3 +299,50 @@ def test_cache_clear_empties_it() -> None:
         cache.put(Path(f"{i}.jpg"), np.zeros((2, 2, 3), dtype=np.uint8))
     cache.clear()
     assert len(cache) == 0
+
+
+# ------------------------------------------- failure is not "no face"
+
+
+def test_a_failed_entry_has_its_own_status() -> None:
+    """A failure must never be reported as a finding about the photograph.
+
+    This project's own changelog once claimed YuNet could not detect a face in
+    a particular photo. It could — detection had failed because no model was
+    loaded, and the UI showed that as "no face detected".
+    """
+    entry = ImageEntry(path=Path("a.jpg"), detected=True, error="no model loaded")
+    assert entry.status is EntryStatus.FAILED
+    assert entry.status is not EntryStatus.NO_FACE
+
+
+def test_a_failed_row_shows_the_reason() -> None:
+    entry = ImageEntry(path=Path("a.jpg"), detected=True, error="could not read the image")
+    text = sidebar_text(entry)
+    assert text.startswith("✗")
+    assert "could not read the image" in text
+
+
+def test_failed_and_no_face_look_different() -> None:
+    failed = ImageEntry(path=Path("a.jpg"), detected=True, error="boom")
+    empty = ImageEntry(path=Path("a.jpg"), detected=True)
+    assert sidebar_text(failed)[0] != sidebar_text(empty)[0]
+    assert sidebar_colour(failed) != sidebar_colour(empty)
+
+
+def test_a_failure_wins_over_an_empty_face_list() -> None:
+    # Both conditions hold at once; the failure is the informative one.
+    entry = ImageEntry(path=Path("a.jpg"), detected=True, faces=[], error="boom")
+    assert entry.status is EntryStatus.FAILED
+
+
+def test_every_status_still_has_a_distinct_colour() -> None:
+    entries = [
+        ImageEntry(path=Path("a.jpg")),
+        ImageEntry(path=Path("a.jpg"), detected=True, error="boom"),
+        ImageEntry(path=Path("a.jpg"), detected=True),
+        ImageEntry(path=Path("a.jpg"), detected=True, faces=[annotated(include=False)]),
+        ImageEntry(path=Path("a.jpg"), detected=True, faces=[annotated(include=True)]),
+    ]
+    colours = [sidebar_colour(e) for e in entries]
+    assert len(set(colours)) == 5, colours

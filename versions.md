@@ -82,26 +82,32 @@ A folder of photos becomes a database the robot can load.
   free of Tk, so 195 of the 241 tests need no display.
 
 **Verified** on the real models and real photos: 6 images, 7 faces, raw L2 norms
-between 9.8 and 13.9. One tight selfie found no face at all — which is what the
-Resize tab in 0.6.0 exists to fix.
+between 9.8 and 13.9.
+
+> **Correction.** This entry originally claimed one photo found no face at all,
+> and offered it as evidence for the Resize tab. That was wrong. Detection had
+> failed because no model was loaded, and the interface displayed the failure as
+> "no face detected". The photo detects reliably at confidence 0.953. Fixed in
+> 0.5.0, where a failure has its own status and can never be mistaken for a
+> finding about the image.
+
+### 0.5.0 — Edit DB · 2026-09-01
+
+- Open an existing database; remove entries, edit groups inline, add faces from a
+  folder or a single image, save over the loaded path or elsewhere.
+- Unsaved changes marked in the frame title and confirmed on close.
+- `EditSession` holds entries, candidates and dirty state, tested display-free.
+  Candidates stay apart from entries until merged.
+- `EntryStatus.FAILED`: a detection failure is no longer shown as "no face
+  detected". That conflation had already produced a false claim in this file.
+
+**Verified** against a real 30-entry production database: removed two entries,
+changed a group, detected 7 faces from real photos, merged them, and saved 35
+entries with raw magnitudes 9.81–14.59 intact. 312 tests.
 
 ---
 
 ## Planned
-
-### 0.5.0 — Edit DB
-
-- Load an existing `.pkl`; table of `# · Name · Group · Dim · L2 norm`.
-- Remove rows (multi-select, Delete key). Inline group edit via combobox,
-  typed values added to presets.
-- Add faces from a folder or a single image as pending cards, then merge the
-  ticked ones.
-- Save over the loaded path or Save as…; duplicates allowed, since the robot
-  resolves by best cosine similarity.
-- Unsaved-changes marker in the frame title and a confirm on close.
-
-**Done when:** an existing database can be opened, trimmed, extended and saved
-without the robot noticing anything but the intended change.
 
 ### 0.6.0 — Resize
 

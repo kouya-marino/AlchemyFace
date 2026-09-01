@@ -291,3 +291,23 @@ def test_closing_the_window_stops_the_worker(app, build) -> None:  # type: ignor
     assert view.worker_is_running
     app.close()
     assert not view.worker_is_running
+
+
+def test_load_folder_refuses_without_a_model(app, tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Starting with no model would fill the sidebar with fake "no face" rows.
+
+    That is exactly how a false claim got into this project's changelog: every
+    image failed, and each failure was displayed as a finding about the photo.
+    """
+    import cv2
+
+    folder = tmp_path / "photos"
+    folder.mkdir()
+    cv2.imwrite(str(folder / "a.jpg"), np.zeros((40, 40, 3), dtype=np.uint8))
+    app.set_recognizer(None)
+    # Patch the view's own reference: it captured the bound method at
+    # construction, so replacing the attribute on `app` would not reach it.
+    monkeypatch.setattr(app.annotation_view, "_ensure_recognizer", lambda: None)
+    assert app.annotation_view.load_folder(folder) is False
+    assert app.annotation_view.entry_count == 0
+    assert "no model" in app.status.lower()

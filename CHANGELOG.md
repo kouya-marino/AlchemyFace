@@ -9,6 +9,46 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.5.0] — 2026-09-01
+
+The Edit DB tab, and a correction.
+
+### Added
+
+- **Edit DB tab** — open an existing database, remove entries, edit groups
+  inline, add faces from a folder or a single image, save over the loaded path or
+  elsewhere. The frame title carries ` *` while unsaved, and closing the window
+  asks before discarding.
+- `alchemyface.gui.edit_data.EditSession` — entries, pending additions and dirty
+  state as one small state machine, tested without a display. Candidates are held
+  apart from entries deliberately: a detected face is a *candidate* until merged,
+  which is why adding one does not mark the session dirty and merging does.
+- `EntryStatus.FAILED`, distinct from `NO_FACE`.
+
+### Fixed
+
+- **A detection failure was displayed as "no face detected".** A broken model, an
+  unreadable file or a missing recognizer all produced the same `⚠ no face` row
+  as a photograph genuinely containing none. Failures now have their own status,
+  glyph, colour and message.
+
+  This mattered: the 0.4.0 entry in `versions.md` claimed one test photo found no
+  face and offered it as evidence for the Resize tab. That was wrong. Detection
+  had failed because no model was loaded; the photo detects reliably at
+  confidence 0.953. `versions.md` carries a correction.
+- **`AnnotationView.load_folder` refuses without a model** instead of starting
+  and filling the sidebar with failures dressed as findings.
+- **The Edit tab could not detect anything until the Build tab had been used.**
+  It was wired to the worker-safe getter, which never loads. It now gets the
+  loading provider, since it works on the main thread. No fake-recognizer test
+  could have shown this — only running it for real.
+- **`EditSession.save` assumed 128 dimensions.** Every real database is 128, so
+  it would have worked by luck and failed on anything else.
+
+### Notes
+
+- 312 tests, 240 of them needing no display.
+
 ## [0.4.1] — 2026-09-01
 
 Documentation only. No code changes.
@@ -182,7 +222,8 @@ First release. Extracted from an earlier prototype into a typed, installable lib
 - 88 tests at 91% coverage. The default suite needs no models, camera or
   network; model-backed tests are marked and skip when weights are absent.
 
-[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.5.0
 [0.4.1]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.3.0

@@ -15,10 +15,12 @@ import datetime as dt
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
+from typing import Callable
 
 from alchemyface import __version__
 from alchemyface.gui.annotation_data import DEFAULT_GROUP
 from alchemyface.gui.annotation_view import AnnotationView, RecognizerLike
+from alchemyface.gui.edit_db_view import EditDBView
 from alchemyface.gui.inspect_view import InspectView
 from alchemyface.gui.reporting import DialogReporter, Reporter
 from alchemyface.store import PickleStore
@@ -56,7 +58,17 @@ class App(tk.Tk):
         overwriting their choice."""
 
         self._build_ui()
-        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
+
+    def _on_window_close(self) -> None:
+        from tkinter import messagebox
+
+        self.close(
+            confirm=lambda: messagebox.askyesno(
+                "Unsaved changes",
+                "Edit DB has unsaved changes that will be lost. Close anyway?",
+            )
+        )
 
     # ================================================================ shared
 
@@ -146,10 +158,26 @@ class App(tk.Tk):
         self.notebook.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=8, pady=8)
 
         build_tab = ttk.Frame(self.notebook)
+        edit_tab = ttk.Frame(self.notebook)
         inspect_tab = ttk.Frame(self.notebook)
         self.notebook.add(build_tab, text="Build DB")
+        self.notebook.add(edit_tab, text="Edit DB")
         self.notebook.add(inspect_tab, text="Inspect DB")
         self._build_build_tab(build_tab)
+
+        self.edit_view = EditDBView(
+            edit_tab,
+            # ensure_recognizer, not _current_recognizer: this tab detects on
+            # the main thread, so it may load models and report progress. The
+            # Build tab gets the plain getter because it calls from a worker
+            # thread, where touching Tk is undefined behaviour.
+            recognizer_provider=self.ensure_recognizer,
+            group_presets_provider=lambda: list(self._group_presets),
+            on_status=self.set_status,
+            on_preset_added=self.add_group_preset,
+            reporter=self.reporter,
+        )
+        self.edit_view.pack(fill=tk.BOTH, expand=True)
 
         self.inspect_view = InspectView(inspect_tab, on_status=self.set_status, reporter=self.reporter)
         self.inspect_view.pack(fill=tk.BOTH, expand=True)
@@ -191,6 +219,7 @@ class App(tk.Tk):
         self.annotation_view = AnnotationView(
             parent,
             recognizer_provider=self._current_recognizer,
+            ensure_recognizer=self.ensure_recognizer,
             group_presets_provider=lambda: list(self._group_presets),
             on_status=self.set_status,
             on_preset_added=self.add_group_preset,
@@ -298,20 +327,31 @@ class App(tk.Tk):
     def tab_labels(self) -> list[str]:
         return [self.notebook.tab(tab_id, "text") for tab_id in self.notebook.tabs()]
 
+    def has_unsaved_changes(self) -> bool:
+        """Whether any tab holds work that closing would discard."""
+        view = getattr(self, "edit_view", None)
+        checker = getattr(view, "has_unsaved_changes", None)
+        return bool(checker()) if callable(checker) else False
+
     @property
     def closed(self) -> bool:
         return self._closed
 
-    def close(self) -> None:
+    def close(self, confirm: Callable[[], bool] | None = None) -> None:
         """Shut down cleanly. Tabs owning threads are told first.
+
+        ``confirm`` is consulted only when a tab holds unsaved work, so the
+        common case does not nag. Returning False cancels the close.
 
         Idempotent: ``tk.Tk.destroy`` raises on an already-destroyed window, so
         a handler firing twice would otherwise crash on exit.
         """
         if self._closed:
             return
+        if confirm is not None and self.has_unsaved_changes() and not confirm():
+            return
         self._closed = True
-        for name in ("annotation_view", "inspect_view"):
+        for name in ("annotation_view", "edit_view", "inspect_view"):
             view = getattr(self, name, None)
             shutdown = getattr(view, "shutdown", None)
             if callable(shutdown):

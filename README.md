@@ -123,8 +123,13 @@ panel per face.
 5. **Save .pkl** writes every included, named face, computing any embedding not
    already cached and renumbering ids from `"0"`.
 
-Sidebar glyphs: `·` pending · `⚠` no face · `○ (0/N)` nothing included ·
-`✓ (k/N)` k of N included.
+Sidebar glyphs: `·` pending · `✗` detection failed · `⚠` no face ·
+`○ (0/N)` nothing included · `✓ (k/N)` k of N included.
+
+A failure and an empty result are shown differently on purpose. Reporting a
+broken model or an unreadable file as "no face detected" makes it look like a
+finding about the photograph — which once put a false claim in this project's
+own roadmap.
 
 ### Inspect DB
 
@@ -132,7 +137,23 @@ Read-only viewer for any database: `ID · Name · Group · Dim · L2 norm · fir
 values`, with a summary line of counts, dimension and file size. Reads the
 four-tuple list form and the back-compatible `{name: vector}` dict.
 
-*Edit DB and Resize are planned — see [versions.md](versions.md).*
+### Edit DB
+
+Open an existing database and change it.
+
+- **Load** any `.pkl`; the table shows `# · Name · Group · Dim · L2 norm · first
+  values`. The frame title gains ` *` while there are unsaved changes, and
+  closing the window asks before discarding them.
+- **Remove selected** — or the Delete key — drops the chosen rows.
+- **Double-click a Group cell** to edit it inline from a combobox of presets.
+  Anything you type is added to the presets.
+- **Add faces** from a folder or a single image. Each detected face becomes a
+  candidate card — thumbnail, Include, Name, Group — and nothing changes until
+  you press **Add checked**. Duplicate names are allowed: the robot resolves by
+  best cosine similarity, so a second photo of someone is an improvement.
+- **Save** writes over the loaded path; **Save as…** writes elsewhere.
+
+*Resize is planned — see [versions.md](versions.md).*
 
 ### The `.pkl` schema
 

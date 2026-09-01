@@ -86,13 +86,13 @@ project page; 0.2.0-0.4.0 shipped with a stale one because it was scheduled for
 - [x] Detection-score spinbox wired to the live detector.
 - [x] Save flow with name validation and on-demand embedding fill-in.
 
-### 0.5.0 · Edit DB — NEXT
-- [ ] Update `README.md` for what this version adds.
-- [ ] Port `edit_db_view.py` onto `PickleStore` — drop the duplicated
+### 0.5.0 · Edit DB — DONE
+- [x] Update `README.md` for what this version adds.
+- [x] Port `edit_db_view.py` onto `PickleStore` — drop the duplicated
       `_normalize_db`.
-- [ ] Unsaved-changes tracking and close confirmation.
+- [x] Unsaved-changes tracking and close confirmation.
 
-### 0.6.0 · Resize
+### 0.6.0 · Resize — NEXT
 - [ ] Update `README.md` for what this version adds.
 - [ ] Port `resize_util.py` and `resize_view.py`.
 - [ ] `alchemyface resize` CLI subcommand replacing the hardcoded script.
