@@ -54,26 +54,26 @@ merge, not as they are written.
 
 ---
 
-## Now — 0.3.0 · GUI shell and Inspect DB
+## Done — 0.3.0 · GUI shell and Inspect DB
 
-- [ ] Add `Pillow>=10` to base dependencies; note in CHANGELOG that the base
+- [x] Add `Pillow>=10` to base dependencies; note in CHANGELOG that the base
       install now includes the GUI.
-- [ ] `src/alchemyface/gui/__init__.py` exporting `App`, imported lazily.
-- [ ] **Guard test: `import alchemyface` succeeds with `tkinter` masked out.**
+- [x] `src/alchemyface/gui/__init__.py` exporting `App`, imported lazily.
+- [x] **Guard test: `import alchemyface` succeeds with `tkinter` masked out.**
       Without this the D3 constraint breaks silently for library users on
       systems where `python3-tk` is not installed.
-- [ ] `alchemyface db` subcommand; import `gui` inside the command body only.
-- [ ] `app.py`: notebook, status bar, group presets, lazy `Recognizer` with
+- [x] `alchemyface db` subcommand; import `gui` inside the command body only.
+- [x] `app.py`: notebook, status bar, group presets, lazy `Recognizer` with
       signature caching and cache invalidation when models change.
-- [ ] `inspect_view.py`: path entry, Browse/Load, entries table, summary line.
-- [ ] `gui` pytest marker; `xvfb-run -a` for GUI tests in `ci.yml`.
-- [ ] Confirm `pytest -m "not gui"` still needs no display.
+- [x] `inspect_view.py`: path entry, Browse/Load, entries table, summary line.
+- [x] `gui` pytest marker; `xvfb-run -a` for GUI tests in `ci.yml`.
+- [x] Confirm `pytest -m "not gui"` still needs no display.
 
 ---
 
 ## Later
 
-### 0.4.0 · Build DB
+### 0.4.0 · Build DB — NEXT
 - [ ] Port `annotation_view.py`, translating `(N, 15)` rows to `Face`.
 - [ ] Keep the concurrency design intact: priority queue, generation counters,
       `queue.Queue` hand-off to the Tk thread, BGR LRU cache, clean shutdown.
@@ -100,8 +100,8 @@ merge, not as they are written.
 
 ## Open questions
 
-- [ ] Entry point: `alchemyface db` subcommand, or a separate `alchemyface-db`
-      console script? Leaning subcommand — one binary.
+- [x] Entry point: settled on the `alchemyface db` subcommand — one binary,
+      and it fails with an apt-get hint when tkinter is absent.
 - [ ] macOS ships Tk 8.5.9. Every widget used works, but 8.6 fixes real
       rendering bugs. Document, or require 8.6?
 - [ ] The robot matches at cosine `0.32`; the library's default is `0.363`.

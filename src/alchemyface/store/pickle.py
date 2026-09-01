@@ -42,7 +42,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from alchemyface.errors import PickleSchemaError
-from alchemyface.types import Match
+from alchemyface.types import Match, StoreEntry
 
 DEFAULT_DIM = 128
 """Dimension of an SFace embedding, and of every known robot database."""
@@ -101,6 +101,22 @@ class PickleStore:
         would make :meth:`search` return ``NaN``.
         """
         return [entry.vector.copy() for entry in self._entries]
+
+    def entries(self) -> list[StoreEntry]:
+        """Every entry, in insertion order, with copied vectors.
+
+        ``search`` answers "who is this?"; this answers "what is in here?",
+        which is what a user interface listing a database needs.
+        """
+        return [
+            StoreEntry(
+                entry_id=entry.entry_id,
+                label=entry.label,
+                group=entry.group,
+                vector=entry.vector.copy(),
+            )
+            for entry in self._entries
+        ]
 
     def add(
         self,

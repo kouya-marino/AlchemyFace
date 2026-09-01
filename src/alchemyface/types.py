@@ -57,3 +57,23 @@ class Recognition:
 
     face: Face
     match: Match | None
+
+
+@dataclass(frozen=True, eq=False)
+class StoreEntry:
+    """One stored gallery entry, as handed out by a store that can enumerate.
+
+    ``eq=False`` for the same reason as :class:`Face`: ``vector`` is an ndarray
+    and a generated ``__eq__`` would return an array.
+
+    Not part of the :class:`~alchemyface.store.base.FaceStore` protocol —
+    searching is the protocol's job. Enumeration is what a user interface needs
+    in order to list a database, so the stores that support it expose this.
+    """
+
+    entry_id: str
+    label: str
+    group: str
+    vector: NDArray[np.float32]
+    """As stored. :class:`~alchemyface.store.pickle.PickleStore` keeps SFace's
+    raw magnitude here, so its L2 norm is meaningful rather than always 1."""

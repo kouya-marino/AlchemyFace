@@ -41,25 +41,28 @@ Reading is deliberately forgiving — the production files disagree with their o
 documented schema (`id` is `int` in one and `str` in two; vectors are
 `(1, 128)` in one and `(128,)` in two).
 
+### 0.3.0 — GUI shell and Inspect DB · 2026-09-01
+
+The smallest useful slice of GUI, on purpose. Packaging, the entry point and
+headless CI are proven here so the large views that follow have nothing to prove
+but themselves.
+
+- `alchemyface db` launches the Face DB Builder. `Pillow` joins the base install.
+- **Inspect DB tab** — open any `.pkl` and see every entry, plus a summary line.
+- `alchemyface.gui.inspect_data` holds the pure presentation functions, so what
+  the tab shows is tested with no display. `StoreEntry` and
+  `PickleStore.entries()` give it something to enumerate.
+- `gui` pytest marker; CI runs those under `xvfb` with `python3-tk`, and the
+  coverage gate moved to that job because it is the only one that sees widgets.
+
+**Verified:** `import alchemyface` works with `tkinter` blocked — three tests
+enforce it, since on Debian and Ubuntu `tkinter` is a separate OS package and
+the mistake is invisible on a developer machine. A real 30-entry production
+database loads in the tab. 162 tests, 95% coverage.
+
 ---
 
 ## Planned
-
-### 0.3.0 — GUI shell and Inspect DB
-
-The smallest complete slice of GUI, deliberately. Proves the entry point, the
-packaging, and headless CI before the large views arrive.
-
-- `alchemyface.gui` package. `Pillow` becomes a base dependency.
-- `alchemyface db` launches the app; `import alchemyface` still works with no
-  `tkinter` present.
-- Main window: notebook, status bar, shared group presets, lazy `Recognizer`.
-- **Inspect DB tab** — open any `.pkl`, list `ID · Name · Group · Dim · L2 norm
-  · first values`, plus a summary line.
-- `gui` pytest marker; GUI tests run under `xvfb-run` in CI.
-
-**Done when:** `alchemyface db` opens, loads all three sample `.pkl` files, and
-`pytest -m "not gui"` still runs display-free.
 
 ### 0.4.0 — Build DB
 

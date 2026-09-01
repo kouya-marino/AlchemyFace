@@ -21,9 +21,9 @@ from alchemyface.errors import (
     PickleSchemaError,
 )
 from alchemyface.pipeline import DEFAULT_THRESHOLD, Recognizer
-from alchemyface.types import Face, Match, Recognition
+from alchemyface.types import Face, Match, Recognition, StoreEntry
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "AlchemyFaceError",
@@ -36,5 +36,6 @@ __all__ = [
     "PickleSchemaError",
     "Recognition",
     "Recognizer",
+    "StoreEntry",
     "__version__",
 ]

@@ -80,13 +80,44 @@ jobs:
       - name: Install package (with dev extras)
         run: pip install -e ".[dev]"
       # opencv-python-headless needs no libGL, so there is nothing to apt-get.
-      # The default suite is deselected down to what runs without the ONNX
-      # weights, a camera, or the network.
+      # This job is the fast path: no ONNX weights, no camera, no network, and
+      # no display. A test with tkinter masked out proves it needs none.
       - name: Run tests
-        run: pytest tests/ -m "not models and not camera" --cov=src/alchemyface --cov-branch --cov-report term-missing --cov-fail-under 80
+        run: pytest tests/ -m "not models and not camera and not gui"
+
+  gui:
+    name: gui (needs a display)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # tkinter is a separate OS package on Debian, and Tk needs a display even
+      # to construct a window. xvfb supplies a virtual one.
+      - name: System packages for headless Tk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
+      - name: Install package (with dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Confirm tkinter is importable
+        run: python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+
+      # This job runs the display-free tests as well as the GUI ones, because
+      # it is the only place the widget modules can be exercised — so it is
+      # also the only place a coverage gate measures the real figure.
+      - name: Run the full suite under xvfb, with coverage
+        run: |
+          xvfb-run -a pytest tests/ -m "not models and not camera" \
+            --cov=src/alchemyface --cov-branch --cov-report term-missing \
+            --cov-fail-under 85
 
   build:
-    needs: [identity, lint, test]
+    needs: [identity, lint, test, gui]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

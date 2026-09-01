@@ -67,6 +67,28 @@ def version() -> None:
     typer.echo(__version__)
 
 
+@app.command()
+def db() -> None:
+    """Launch the Face DB Builder desktop application."""
+    # Imported here rather than at module scope on purpose. tkinter is a
+    # separate OS package on Debian and Ubuntu, so importing it at the top
+    # would make `alchemyface --help` — and `import alchemyface` — fail for
+    # anyone who only wanted the library.
+    try:
+        from alchemyface.gui.app import main as run_app  # noqa: PLC0415
+    except ImportError as exc:
+        typer.echo(
+            f"the desktop application needs tkinter, which is not available: {exc}\n"
+            "tkinter ships with Python but is packaged separately on some systems.\n"
+            "  Debian/Ubuntu:  sudo apt-get install python3-tk\n"
+            "  Fedora:         sudo dnf install python3-tkinter\n"
+            "  macOS/Windows:  reinstall Python from python.org",
+            err=True,
+        )
+        raise typer.Exit(code=3) from exc
+    run_app()
+
+
 @app.command("download-models")
 def download_models(
     model_dir: Path | None = typer.Option(

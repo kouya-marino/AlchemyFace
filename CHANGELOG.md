@@ -9,6 +9,46 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.3.0] — 2026-09-01
+
+The desktop application arrives, deliberately as its smallest useful slice: the
+window, and one read-only tab. Packaging, the entry point and headless CI are
+proven here so the large views that follow have nothing to prove but themselves.
+
+### Added
+
+- `alchemyface db` launches the **Face DB Builder** desktop application.
+- **Inspect DB tab** — open any face database `.pkl` and see every entry as
+  `# · ID · Name · Group · Dim · L2 norm · First values`, with a summary line
+  giving counts, dimension and file size.
+- `alchemyface.gui.inspect_data`: `EntryRow`, `DatabaseSummary`, `entry_rows()`
+  and `summarise()`. Pure functions over a store, so what the tab shows is
+  tested without a display.
+- `StoreEntry`, and `PickleStore.entries()`. `search` answers "who is this?";
+  this answers "what is in here?", which is what listing a database needs.
+- A `gui` pytest marker. `pytest -m "not gui"` is the fast path and needs no
+  display — and, as a test proves, no `tkinter` either.
+
+### Changed
+
+- `Pillow>=10` joins the base dependencies. The GUI ships in the base install;
+  `tkinter` is standard library, so Pillow is the only addition.
+- CI gained a `gui` job running under `xvfb` with `python3-tk`. The coverage
+  gate moved there, because it is the only job that can exercise the widgets —
+  gating the display-free matrix job would have measured the wrong thing.
+
+### Notes
+
+- **Nothing in the library imports `tkinter`.** On Debian and Ubuntu it is a
+  separate OS package, so importing it anywhere in the library would break
+  `import alchemyface` for people who only wanted the library. Three tests
+  enforce this: two import the public surface in a subprocess with `tkinter`
+  blocked, and one statically locates any module-scope import. `alchemyface db`
+  fails with an `apt-get install python3-tk` hint rather than a traceback.
+- `App.close()` is idempotent. `tk.Tk.destroy()` raises on an already-destroyed
+  window, so a close handler firing twice would have crashed on exit.
+- 162 tests, 95% coverage locally with weights present; 91% without.
+
 ## [0.2.0] — 2026-09-01
 
 Groundwork for the Face DB Builder GUI. Library only — no GUI yet. Both
@@ -67,6 +107,7 @@ First release. Extracted from an earlier prototype into a typed, installable lib
 - 88 tests at 91% coverage. The default suite needs no models, camera or
   network; model-backed tests are marked and skip when weights are absent.
 
-[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.2.0
 [0.1.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.1.0
