@@ -5,8 +5,8 @@ recognizer — and delegates everything else. Each tab receives what it needs as
 callables, so a tab can be built and driven in a test without the window knowing
 anything about it.
 
-Tabs arrive one version at a time: Inspect DB, then Build DB. Edit and Resize
-follow.
+Tabs arrive one version at a time. Build DB, Edit DB and Inspect DB are here;
+Resize is still to come.
 """
 
 from __future__ import annotations
@@ -30,6 +30,9 @@ WINDOW_GEOMETRY = "1360x860"
 DEFAULT_SCORE_THRESHOLD = 0.9
 """YuNet's own default. Lower surfaces more faces; higher trims false ones."""
 
+MIN_SCORE_THRESHOLD = 0.10
+MAX_SCORE_THRESHOLD = 0.99
+
 
 class App(tk.Tk):
     """The application window."""
@@ -49,7 +52,7 @@ class App(tk.Tk):
         self._status_var = tk.StringVar(value="Ready.")
         self._group_presets: list[str] = [DEFAULT_GROUP]
         self._recognizer: RecognizerLike | None = None
-        self._score_threshold = DEFAULT_SCORE_THRESHOLD
+        self._score_threshold_var = tk.DoubleVar(value=DEFAULT_SCORE_THRESHOLD)
 
         self._folder_var = tk.StringVar(value="")
         self._output_var = tk.StringVar(value="")
@@ -91,6 +94,32 @@ class App(tk.Tk):
         self._group_listbox.insert(tk.END, value)
 
     # -------------------------------------------------------------- the model
+
+    @property
+    def score_threshold(self) -> float:
+        """Detection score YuNet must clear, clamped to its legal range."""
+        try:
+            value = float(self._score_threshold_var.get())
+        except (tk.TclError, ValueError):
+            return DEFAULT_SCORE_THRESHOLD
+        return max(MIN_SCORE_THRESHOLD, min(MAX_SCORE_THRESHOLD, value))
+
+    def apply_score_threshold(self) -> float:
+        """Push the current threshold to the live detector, if one exists.
+
+        Applied in place rather than by rebuilding the recognizer, so cached
+        embeddings — which the threshold does not affect — survive.
+        """
+        value = self.score_threshold
+        self._score_threshold_var.set(round(value, 2))
+        detector = getattr(self._recognizer, "detector", None)
+        setter = getattr(detector, "set_score_threshold", None)
+        if callable(setter):
+            setter(value)
+            self.set_status(f"Detection score = {value:.2f}. Use Re-detect to re-run on this image.")
+        else:
+            self.set_status(f"Detection score = {value:.2f}. Applies when models load.")
+        return value
 
     @property
     def recognizer(self) -> RecognizerLike | None:
@@ -135,7 +164,7 @@ class App(tk.Tk):
             from alchemyface.pipeline import Recognizer
 
             self._recognizer = Recognizer(
-                detector=YuNetDetector(score_threshold=self._score_threshold),
+                detector=YuNetDetector(score_threshold=self.score_threshold),
                 embedder=SFaceEmbedder(normalize=False),
                 store=PickleStore(),
             )
@@ -328,10 +357,19 @@ class App(tk.Tk):
         return [self.notebook.tab(tab_id, "text") for tab_id in self.notebook.tabs()]
 
     def has_unsaved_changes(self) -> bool:
-        """Whether any tab holds work that closing would discard."""
-        view = getattr(self, "edit_view", None)
-        checker = getattr(view, "has_unsaved_changes", None)
-        return bool(checker()) if callable(checker) else False
+        """Whether any tab holds work that closing would discard.
+
+        Both tabs, not just Edit. The Build tab's annotations — typed names,
+        groups, include ticks — are tracked on ``ImageEntry.edited``, and were
+        being discarded silently because this only asked Edit.
+        """
+        edit = getattr(self, "edit_view", None)
+        checker = getattr(edit, "has_unsaved_changes", None)
+        if callable(checker) and checker():
+            return True
+        build = getattr(self, "annotation_view", None)
+        entries = getattr(build, "entries", None) or []
+        return any(entry.edited for entry in entries)
 
     @property
     def closed(self) -> bool:

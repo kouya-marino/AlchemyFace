@@ -53,6 +53,15 @@ jobs:
           print(f"tag {tag} matches pyproject version {want}")
           PY
 
+      # tkinter is a separate OS package on Debian and Tk needs a display, so
+      # without these the gui-marked tests skip silently — which made the
+      # comment above ("the same checks as CI") untrue: a release could ship
+      # with every GUI test unrun.
+      - name: System packages for headless Tk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb
+
       - name: Install package (with dev extras)
         run: pip install -e ".[dev]"
 
@@ -64,8 +73,17 @@ jobs:
       - name: Type check
         run: mypy src/alchemyface
 
-      - name: Tests
-        run: pytest tests/ -m "not models and not camera" -q
+      - name: README PyPI badge must match the declared version
+        run: |
+          DECLARED=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          BADGE=$(grep -oE 'PyPI-v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | sed 's/^PyPI-v//')
+          echo "pyproject=${DECLARED}  README badge=${BADGE:-<none>}"
+          [ "$DECLARED" = "$BADGE" ] || { echo "::error::badge v${BADGE} vs declared ${DECLARED}"; exit 1; }
+
+      - name: Tests, including the GUI, under xvfb with coverage
+        run: |
+          xvfb-run -a pytest tests/ -m "not models and not camera" -q \
+            --cov=src/alchemyface --cov-branch --cov-fail-under 85
 
   publish:
     needs: [verify]

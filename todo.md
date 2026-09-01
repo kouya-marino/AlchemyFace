@@ -86,7 +86,8 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
       `queue.Queue` hand-off to the Tk thread, BGR LRU cache, clean shutdown.
 - [x] Keep the responsiveness work: 80 ms debounced canvas resize, cached
       `PhotoImage` keyed on (path, canvas size), 50 ms completion polling.
-- [x] Detection-score spinbox wired to the live detector.
+- [x] Detection-score spinbox wired to the live detector. *(Actually shipped in
+      0.6.0 — this box was ticked in 0.4.0 while the control did not exist.)*
 - [x] Save flow with name validation and on-demand embedding fill-in.
 
 ### 0.5.0 · Edit DB — DONE
@@ -95,7 +96,7 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
       `_normalize_db`.
 - [x] Unsaved-changes tracking and close confirmation.
 
-### 0.6.0 · Resize — NEXT
+### 0.7.0 · Resize — NEXT
 - [ ] Update `README.md` for what this version adds.
 - [ ] Port `resize_util.py` and `resize_view.py`.
 - [ ] `alchemyface resize` CLI subcommand replacing the hardcoded script.

@@ -71,9 +71,10 @@ def version() -> None:
 def db() -> None:
     """Launch the Face DB Builder desktop application."""
     # Imported here rather than at module scope on purpose. tkinter is a
-    # separate OS package on Debian and Ubuntu, so importing it at the top
-    # would make `alchemyface --help` — and `import alchemyface` — fail for
-    # anyone who only wanted the library.
+    # separate OS package on Debian and Ubuntu, so importing it at the top would
+    # make every `alchemyface` command fail — `--help` included — for anyone who
+    # only wanted the library. (`import alchemyface` is unaffected either way:
+    # the package __init__ never imports this module.)
     try:
         from alchemyface.gui.app import main as run_app  # noqa: PLC0415
     except ImportError as exc:

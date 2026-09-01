@@ -94,11 +94,13 @@ class AnnotationView(ttk.Frame):
         self._box_items: list[int] = []
         self._thumb_refs: list[ImageTk.PhotoImage] = []
         self._face_vars: list[tk.Variable] = []
-        """Tk variables outlive the widgets bound to them only if something
-        holds a reference. Without this they become garbage at an arbitrary
-        moment and their __del__ tries to talk to a Tk interpreter that may
-        already be gone — "main thread is not in main loop". Same reason
-        _thumb_refs exists for PhotoImage."""
+        """Every Tk variable bound to a face card, so its trace can be detached
+        when the card is replaced.
+
+        A trace registers the variable inside Tk, so destroying the widget does
+        not free it. Re-rendering the face panel on every navigation therefore
+        accumulates three Tcl variables per face indefinitely — measured at 480
+        after 80 re-renders of a two-face image."""
         self._resize_job: str | None = None
         self._poll_job: str | None = None
 
@@ -662,6 +664,10 @@ class AnnotationView(ttk.Frame):
         )
         grid.columnconfigure(1, weight=1)
 
+        # Register them, or _release_face_vars has nothing to release. This was
+        # missing until an audit measured 480 leaked Tcl variables over 80
+        # re-renders — the mechanism existed, the one line wiring it did not.
+        self._face_vars.extend((include_var, name_var, group_var))
         include_var.trace_add("write", lambda *_a: self.set_include(position, include_var.get()))
         name_var.trace_add("write", lambda *_a: self.set_name(position, name_var.get()))
         group_var.trace_add("write", lambda *_a: self.set_group(position, group_var.get()))

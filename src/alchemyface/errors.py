@@ -1,6 +1,15 @@
-"""Every exception AlchemyFace raises descends from AlchemyFaceError, so a
-caller can wrap the library in one except clause and never see a bare
-cv2.error or urllib exception leak through."""
+"""The library's own error hierarchy.
+
+Everything AlchemyFace raises *deliberately* descends from AlchemyFaceError:
+model resolution, downloads, database schemas, and "no face here".
+
+It is not a blanket guarantee, and was documented as one until an audit proved
+otherwise. Constructing a detector or embedder over a file that is not loadable
+ONNX raises ``cv2.error`` — including the Git-LFS-pointer case ``models.py``
+warns about, since a file already on disk is trusted rather than checksummed.
+Bad arguments raise ``ValueError``; an unopenable camera raises ``RuntimeError``.
+A caller wanting total isolation needs ``except Exception`` around
+construction, not ``except AlchemyFaceError``."""
 
 from __future__ import annotations
 
