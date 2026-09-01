@@ -20,6 +20,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # On a pull_request event, checkout defaults to refs/pull/N/merge — a
+          # synthetic commit GitHub authors itself as `noreply@github.com` and
+          # the PR author's `…@users.noreply.github.com`. Walking that history
+          # fails the guard on every PR. Check out the real head instead; on a
+          # push event this expression falls back to github.sha.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Reject unexpected commit identities
         run: |
           ALLOWED='prashantrawatmailbox@gmail.com'
