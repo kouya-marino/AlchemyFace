@@ -157,3 +157,9 @@ def test_save_of_an_empty_store_round_trips(tmp_path: Path) -> None:
     restored = InMemoryStore(dim=4)
     restored.load(path)
     assert len(restored) == 0
+
+
+def test_satisfies_the_facestore_protocol() -> None:
+    from alchemyface.store.base import FaceStore
+
+    assert isinstance(InMemoryStore(dim=4), FaceStore)

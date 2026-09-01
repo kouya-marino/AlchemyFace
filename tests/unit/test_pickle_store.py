@@ -306,3 +306,44 @@ def test_real_databases_load(pkl_dir: Path) -> None:
         # Every one stores raw vectors — that is why normalize=False exists.
         norms = [float(np.linalg.norm(v)) for v in store.vectors()]
         assert min(norms) > 2.0, f"{name}: vectors look normalised"
+
+
+# ------------------------------------------------- protocol + invariants
+
+
+def test_satisfies_the_facestore_protocol() -> None:
+    from alchemyface.store.base import FaceStore
+
+    # The class claims to implement it; nothing asserted so before now.
+    assert isinstance(PickleStore(dim=4), FaceStore)
+
+
+def test_vectors_returns_copies_not_references() -> None:
+    # A caller mutating what it was handed must not corrupt the gallery. If it
+    # could, a zero written that way would make search() return NaN.
+    store = PickleStore(dim=4)
+    store.add("ada", basis(0, scale=10.0))
+    handed_out = store.vectors()[0]
+    handed_out[0] = 999.0
+    assert store.vectors()[0][0] == pytest.approx(10.0)
+
+
+def test_add_refuses_a_zero_vector() -> None:
+    # The other half of the boundary; load() is covered separately.
+    store = PickleStore(dim=4)
+    with pytest.raises(AlchemyFaceError, match="zero"):
+        store.add("ada", np.zeros(4, dtype=np.float32))
+
+
+def test_add_refuses_a_wrong_dimension() -> None:
+    store = PickleStore(dim=4)
+    with pytest.raises(AlchemyFaceError, match="dimension"):
+        store.add("ada", basis(0, dim=8))
+
+
+def test_search_never_returns_nan_for_valid_input() -> None:
+    store = PickleStore(dim=4)
+    for i in range(4):
+        store.add(f"p{i}", basis(i, scale=float(i + 1) * 3.0))
+    scores = [m.score for m in store.search(basis(0), k=4)]
+    assert all(np.isfinite(s) for s in scores)

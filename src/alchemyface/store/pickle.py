@@ -19,6 +19,15 @@ unaffected — cosine similarity is scale-invariant.
 documented schema: ``id`` is an ``int`` in one file and a ``str`` in others, and
 the vector is ``(1, 128)`` in one and ``(128,)`` in others. Both are coerced. A
 stricter reader would refuse a database the robot loads today.
+
+Forgiving is not the same as permissive. Zero vectors are refused by both
+:meth:`add` and :meth:`load`, unlike the original app's reader, because a zero
+has no direction: ``search`` would divide by its norm and return ``NaN`` for
+every query. Rejecting at the boundary is the only place that check works.
+
+``search`` rebuilds its matrix on each call. With a few hundred entries — the
+size of every real database here — that is far cheaper than maintaining an
+incremental copy, and it keeps ``add`` and ``remove`` trivial.
 """
 
 from __future__ import annotations
@@ -85,8 +94,13 @@ class PickleStore:
         return len(self._entries)
 
     def vectors(self) -> list[NDArray[np.float32]]:
-        """The stored vectors, exactly as held — unnormalised."""
-        return [entry.vector for entry in self._entries]
+        """Copies of the stored vectors, exactly as held — unnormalised.
+
+        Copies, not references: a caller mutating a returned array would
+        otherwise corrupt the gallery silently, and a zero written in that way
+        would make :meth:`search` return ``NaN``.
+        """
+        return [entry.vector.copy() for entry in self._entries]
 
     def add(
         self,
