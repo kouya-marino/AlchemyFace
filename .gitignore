@@ -76,6 +76,13 @@ dmypy.json
 # ─── Docs ────────────────────────────────────────────────────────────────────
 /site
 
+# Design specs and implementation plans are working artefacts of how this was
+# built, not documentation of what it is. They are kept locally and out of the
+# repository: the sibling Alchemy projects track no equivalent, and these were
+# where a client name and a former employer's directory path leaked into a public
+# repo. What a reader needs is in README.md, CHANGELOG.md and versions.md.
+docs/
+
 # ─── Editors / OS ────────────────────────────────────────────────────────────
 .idea/
 *.code-workspace

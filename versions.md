@@ -3,10 +3,6 @@
 A curated overview of where AlchemyFace has been and where it is going.
 `CHANGELOG.md` is the detailed per-release log; this file is the map.
 
-Design: [`docs/superpowers/specs/2026-08-28-alchemyface-design.md`](docs/superpowers/specs/2026-08-28-alchemyface-design.md)
-(library) and [`docs/superpowers/specs/2026-09-01-face-db-builder-design.md`](docs/superpowers/specs/2026-09-01-face-db-builder-design.md)
-(the GUI app).
-
 Every version below is a branch → pull request → review → merge → tag.
 Each one leaves the project working and independently publishable.
 
