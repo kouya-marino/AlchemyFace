@@ -1,6 +1,5 @@
 # AlchemyFace
 
-![coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)
 [![PyPI](https://img.shields.io/pypi/v/alchemyface.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
@@ -209,6 +208,11 @@ pip install -e ".[dev]"
 | `ruff check src tests` · `ruff format src tests` | lint and format |
 | `mypy src/alchemyface` | type check |
 | `python -m build` | wheel and sdist |
+
+There is deliberately no coverage badge. A hand-written percentage goes stale
+silently, and generating a real one needs either a third-party service or a bot
+committing to `main` — which the repository's commit-identity check refuses. The
+CI badge already means the gate passed, and that gate includes a coverage floor.
 
 Model-backed tests skip unless the weights are present:
 
