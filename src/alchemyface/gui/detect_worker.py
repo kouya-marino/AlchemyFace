@@ -152,9 +152,14 @@ class DetectionWorker:
     def submit(self, index: int, path: Path, *, foreground: bool = True) -> None:
         """Queue one image for detection.
 
-        A foreground submission is placed ahead of every background one. Calling
-        this again for an image already queued does nothing, so eagerly
-        prefetching a whole folder cannot pile up duplicates.
+        A foreground submission is placed ahead of every background one.
+
+        A *background* re-submission of something already queued is dropped, so
+        eagerly prefetching a whole folder cannot pile up duplicates. A
+        foreground one is deliberately let through, so navigating to an image
+        waiting behind a prefetch moves it to the front; the duplicate job is
+        skipped in the loop once the first has completed. Anything already
+        detected is dropped either way.
         """
         if self._stopped:
             return

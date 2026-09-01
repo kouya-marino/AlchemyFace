@@ -61,7 +61,21 @@ class YuNetDetector:
         # declare; the module-level `FaceDetectorYN_create` alias is not, and
         # trips mypy with "Module has no attribute".
         self._detector = cv2.FaceDetectorYN.create(str(path), "", (320, 320), score_threshold, nms_threshold, top_k)
+        self._score_threshold = float(score_threshold)
         self._input_size = (320, 320)
+
+    @property
+    def score_threshold(self) -> float:
+        return self._score_threshold
+
+    def set_score_threshold(self, value: float) -> None:
+        """Change the detection score without rebuilding the network.
+
+        Rebuilding would discard nothing here, but the caller may hold cached
+        embeddings that the threshold does not invalidate.
+        """
+        self._score_threshold = float(value)
+        self._detector.setScoreThreshold(self._score_threshold)
 
     def detect(self, image: NDArray[np.uint8]) -> list[Face]:
         """Every face found in a BGR image, with boxes clamped to its bounds."""

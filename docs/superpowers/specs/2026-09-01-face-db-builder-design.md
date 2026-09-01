@@ -1,7 +1,8 @@
 # AlchemyFace — Face DB Builder
 
 **Date:** 2026-09-01
-**Status:** design approved in chat; awaiting spec review
+**Status:** implemented. 0.2.0 through 0.5.0 have shipped; only 0.6.0 (Resize)
+and 1.0.0 remain of the roadmap in §6.
 **Extends:** `2026-08-28-alchemyface-design.md` (the library this builds on)
 **Ports from:** `Arithmer_Data/Face_Reco_App` — a working Tkinter app, ~2,900 lines
 
@@ -123,7 +124,7 @@ production databases:
 
 | File | Entries | `id` type | Vector shape | L2 norm |
 |---|---|---|---|---|
-| `face_data_26_08_2025_paloma.pkl` | 53 | **`int`** | **`(1, 128)`** | 13.58 |
+| `face_data_26_08_2025_paloma.pkl` | 53 | **`int` ×46, `str` ×7** | **`(1, 128)`** | 13.58 |
 | `face_db_20260511_check.pkl` | 30 | `str` | `(128,)` | 11.58 |
 | `face_db_test.pkl` | 7 | `str` | `(128,)` | 13.23 |
 
@@ -132,7 +133,15 @@ The original app absorbs both variations silently, via `str(_id)` and
 `str`, flatten any vector to one dimension, and only then reject. A stricter
 reader would refuse a database the robot loads today.
 
-All three store raw vectors (L2 between 11.5 and 13.6), confirming D5.
+The variation is **per entry, not per file**: `face_data_26_08_2025_paloma.pkl`
+holds 46 `int` ids and 7 `str` ids in the same list. Coercing every id
+individually — which is what `PickleStore` does — is therefore required, not
+merely tidy.
+
+All three store raw vectors, confirming D5. Across all 90 entries the norms
+span **9.75 to 14.59** (paloma 9.75–14.50, check 10.83–14.59, test 9.81–13.94).
+The figures in the table above are each file's *first* entry — an earlier draft
+presented them as the range, which they are not.
 
 ## 6. Version roadmap
 
@@ -198,9 +207,16 @@ The source app holds far more than the library did:
 | `face_images.zip` | 233 MB |
 
 Copied into git-ignored `_local/`: the ONNX models (37 MB, public OpenCV Zoo
-weights) and `test_images/` (660 KB, 6 images) so the suite is meaningful.
-Left in the original directory: the zip, the bulk photo folders, the audio,
-and the production `.pkl` files.
+weights), `test_images/` (660 KB, 6 images), **and the three production `.pkl`
+databases** (52 KB, 90 embeddings of real people) as schema fixtures — the test
+suite reads them through a `pkl_dir` fixture.
+Left in the original directory: the 233 MB zip, the bulk photo folders, and the
+69 name recordings.
+
+An earlier version of this paragraph said the production `.pkl` files were left
+behind. They were not. Understating the inventory in the one section about
+personal data is the worst place to be wrong, so it is corrected rather than
+quietly edited.
 
 Controls are the library's, unchanged: `_local/` git-ignored, `MANIFEST.in`
 prunes it, and a CI step fails the build if a distribution ever contains it.

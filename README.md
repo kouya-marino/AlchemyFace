@@ -1,6 +1,6 @@
 # AlchemyFace
 
-[![PyPI](https://img.shields.io/badge/PyPI-v0.5.0-blue.svg)](https://pypi.org/project/alchemyface/)
+[![PyPI](https://img.shields.io/badge/PyPI-v0.6.0-blue.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -17,9 +17,14 @@ alchemyface db          # the Face DB Builder
 ## Why
 
 Most Python face-recognition packages pull in dlib, PyTorch or TensorFlow.
-AlchemyFace uses two small ONNX models through OpenCV's own DNN runtime: a
-working install is a few megabytes of Python plus about 37 MB of weights fetched
-once, on first use.
+AlchemyFace uses two small ONNX models through OpenCV's own DNN runtime, so the
+recognition stack itself is small: the wheel is about 30 KB, and the weights are
+37 MB fetched once on first use.
+
+Being straight about the total: the dependencies are not small. OpenCV, NumPy and
+Pillow come to roughly **160 MB installed** — most of it OpenCV. That is well
+under a PyTorch or TensorFlow install, but it is not "a few megabytes", as this
+paragraph previously claimed.
 
 ---
 
@@ -119,7 +124,9 @@ panel per face.
    filename, or `<stem>_faceN` when an image holds several.
 3. Untick **Include** to drop a face; its box turns dashed.
 4. Click a box to select that face. **Re-detect** runs YuNet again, asking first
-   if you have unsaved edits.
+   if you have unsaved edits. The **Detection score** spinbox (0.10–0.99, default
+   0.9 — YuNet's own) applies to the live detector immediately; lower finds more
+   faces, higher is stricter.
 5. **Save .pkl** writes every included, named face, computing any embedding not
    already cached and renumbering ids from `"0"`.
 
@@ -133,8 +140,8 @@ own roadmap.
 
 ### Inspect DB
 
-Read-only viewer for any database: `ID · Name · Group · Dim · L2 norm · first
-values`, with a summary line of counts, dimension and file size. Reads the
+Read-only viewer for any database: `# · ID · Name · Group · Dim · L2 norm ·
+first values`, with a summary line of counts, dimension and file size. Reads the
 four-tuple list form and the back-compatible `{name: vector}` dict.
 
 ### Edit DB
@@ -182,8 +189,12 @@ to install rather than raising:
 ```
 $ alchemyface db
 the desktop application needs tkinter, which is not available: No module named '_tkinter'
+tkinter ships with Python but is packaged separately on some systems.
   Debian/Ubuntu:  sudo apt-get install python3-tk
   Fedora:         sudo dnf install python3-tkinter
+  macOS/Windows:  reinstall Python from python.org
+$ echo $?
+3
 ```
 
 The presentation helpers are Tk-free too, so you can render a database in a web

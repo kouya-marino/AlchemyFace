@@ -347,3 +347,26 @@ def test_search_never_returns_nan_for_valid_input() -> None:
         store.add(f"p{i}", basis(i, scale=float(i + 1) * 3.0))
     scores = [m.score for m in store.search(basis(0), k=4)]
     assert all(np.isfinite(s) for s in scores)
+
+
+def test_load_wraps_an_uninstalled_module_reference(tmp_path: Path) -> None:
+    """A pickle whose GLOBAL opcode names an absent module used to escape.
+
+    load() enumerated the exceptions it expected, so ModuleNotFoundError went
+    straight past the wrapper and out of the library as itself.
+    """
+    p = tmp_path / "ghost.pkl"
+    p.write_bytes(b"\x80\x04\x95\x1c\x00\x00\x00\x00\x00\x00\x00\x8c\x11definitely_absent\x94\x8c\x01X\x94\x93\x94.")
+    with pytest.raises(PickleSchemaError):
+        PickleStore(dim=4).load(p)
+
+
+def test_load_of_a_missing_file_is_still_a_schema_error(tmp_path: Path) -> None:
+    """OSError keeps its own clearer message rather than the generic one."""
+    with pytest.raises(PickleSchemaError, match="cannot be read"):
+        PickleStore(dim=4).load(tmp_path / "absent.pkl")
+
+
+def test_load_of_a_directory_is_a_schema_error(tmp_path: Path) -> None:
+    with pytest.raises(PickleSchemaError):
+        PickleStore(dim=4).load(tmp_path)

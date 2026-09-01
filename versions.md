@@ -41,7 +41,7 @@ No GUI. Two additions the app needs, both useful on their own.
 
 **Verified:** all three production databases load byte-identically to the
 original app's reader, and a database written by `PickleStore` loads back in
-that app with its vectors intact. 123 tests, 91% coverage.
+that app with its vectors intact. 130 tests at this tag, 91% coverage.
 
 Reading is deliberately forgiving — the production files disagree with their own
 documented schema (`id` is `int` in one and `str` in two; vectors are
@@ -64,7 +64,8 @@ but themselves.
 **Verified:** `import alchemyface` works with `tkinter` blocked — three tests
 enforce it, since on Debian and Ubuntu `tkinter` is a separate OS package and
 the mistake is invisible on a developer machine. A real 30-entry production
-database loads in the tab. 162 tests, 95% coverage.
+database loads in the tab. 164 tests at this tag, 95% coverage with the weights
+present.
 
 ### 0.4.0 — Build DB · 2026-09-01
 
@@ -76,10 +77,13 @@ A folder of photos becomes a database the robot can load.
   counters so opening a different folder abandons the old one.
 - Click-to-select on the canvas; excluded faces draw dashed. Re-detect asks
   before discarding edits.
+- Detection-score spinbox (0.10–0.99, default 0.9), applied to the live
+  detector. *Shipped late, in 0.5.1: it was dropped from 0.4.0's scope while
+  its checkbox was ticked, which an audit caught.*
 - Save writes included, named faces as a robot-format `.pkl` with raw vectors
   and ids renumbered from `"0"`.
 - `annotation_data` and `detect_worker` hold the logic and the threading, both
-  free of Tk, so 195 of the 241 tests need no display.
+  free of Tk, so 207 of the 242 tests at this tag need no display.
 
 **Verified** on the real models and real photos: 6 images, 7 faces, raw L2 norms
 between 9.8 and 13.9.
@@ -103,13 +107,34 @@ between 9.8 and 13.9.
 
 **Verified** against a real 30-entry production database: removed two entries,
 changed a group, detected 7 faces from real photos, merged them, and saved 35
-entries with raw magnitudes 9.81–14.59 intact. 312 tests.
+entries with raw magnitudes 9.81–14.59 intact. 313 tests.
+
+### 0.6.0 — documentation audit, and the detection score · 2026-09-02
+
+A fan-out audit checked every documented claim against the code, adversarially
+verifying each discrepancy. 25 confirmed; several were defects, not prose.
+
+- **Detection-score spinbox** (0.10–0.99, default 0.9), applied to the live
+  detector. It had been ticked as done since 0.4.0 while no such control existed.
+- Face-card Tk variables no longer leak — 480 over 80 re-renders, now 0. The
+  release mechanism existed; the line registering variables with it never did.
+- Closing now asks before discarding Build-tab annotations.
+- `requirements.txt` had omitted Pillow; a test now enforces both requirements
+  files against `pyproject.toml`.
+- `publish.yml` claimed CI's checks while skipping every GUI test; it now runs
+  them under `xvfb` with the coverage gate.
+- Corrected: the README's install size (~160 MB, not "a few megabytes"), the
+  spec's personal-data inventory, its L2 range, its per-entry id variation, four
+  test counts, and three docstrings that described behaviour the code lacked.
+
+**Verified:** every fix has a test, and each was checked to fail with its fix
+reverted. 326 tests collected; 260 run without a display.
 
 ---
 
 ## Planned
 
-### 0.6.0 — Resize
+### 0.7.0 — Resize
 
 Bulk pre-resize before enrolment. Tight phone selfies where a face fills more
 than half the frame defeat YuNet's largest anchors; shrinking brings them into

@@ -23,7 +23,7 @@ from alchemyface.errors import (
 from alchemyface.pipeline import DEFAULT_THRESHOLD, Recognizer
 from alchemyface.types import Face, Match, Recognition, StoreEntry
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "AlchemyFaceError",

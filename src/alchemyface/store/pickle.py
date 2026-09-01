@@ -188,10 +188,15 @@ class PickleStore:
         try:
             with open(path, "rb") as handle:
                 data = pickle.load(handle)
-        except (pickle.UnpicklingError, EOFError, ValueError, IndexError) as exc:
-            raise PickleSchemaError(f"{path}: not a readable pickle: {exc}") from exc
         except (OSError, PermissionError) as exc:
             raise PickleSchemaError(f"{path}: cannot be read: {exc}") from exc
+        except Exception as exc:  # noqa: BLE001
+            # Unpickling can raise almost anything: UnpicklingError, EOFError,
+            # ValueError, IndexError, AttributeError, and ModuleNotFoundError
+            # when a GLOBAL opcode names a module that is not installed.
+            # Enumerating them left real files crashing past the wrapper.
+            # OSError is caught above so it keeps its own clearer message.
+            raise PickleSchemaError(f"{path}: not a readable pickle: {exc}") from exc
 
         self._entries = self._parse(data)
         if self._entries:

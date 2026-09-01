@@ -88,3 +88,32 @@ def test_detector_rejects_a_non_bgr_image(model_dir: Path) -> None:
     detector = YuNetDetector(model_dir=model_dir)
     with pytest.raises(ValueError, match="three-channel"):
         detector.detect(np.zeros((240, 320), dtype=np.uint8))
+
+
+@pytest.mark.models
+def test_score_threshold_can_be_changed_at_runtime(model_dir: Path) -> None:
+    """The Build tab's spinbox needs this: raising the bar must not require
+    rebuilding the network, because the caller holds cached embeddings that the
+    threshold does not invalidate."""
+    detector = YuNetDetector(model_dir=model_dir)
+    assert detector.score_threshold == pytest.approx(0.9)
+    detector.set_score_threshold(0.35)
+    assert detector.score_threshold == pytest.approx(0.35)
+
+
+@pytest.mark.models
+def test_a_higher_threshold_actually_rejects_faces(model_dir: Path, pkl_dir: Path) -> None:
+    """Proving the setter reaches the network, not just the attribute."""
+    import cv2
+
+    images = sorted((Path(__file__).resolve().parents[2] / "_local" / "test_images").glob("*"))
+    if not images:
+        pytest.skip("test images not present")
+    image = cv2.imread(str(images[0]))
+    detector = YuNetDetector(model_dir=model_dir)
+    detector.set_score_threshold(0.30)
+    lenient = len(detector.detect(image))
+    detector.set_score_threshold(0.999)
+    strict = len(detector.detect(image))
+    assert lenient >= 1
+    assert strict < lenient, "raising the threshold changed nothing"

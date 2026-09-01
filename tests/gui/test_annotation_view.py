@@ -311,3 +311,69 @@ def test_load_folder_refuses_without_a_model(app, tmp_path: Path, monkeypatch) -
     assert app.annotation_view.load_folder(folder) is False
     assert app.annotation_view.entry_count == 0
     assert "no model" in app.status.lower()
+
+
+def test_face_card_variables_do_not_accumulate(app, build) -> None:  # type: ignore[no-untyped-def]
+    """Re-rendering the face panel must not leak Tcl variables.
+
+    A trace registers a variable inside Tk, so destroying the widget does not
+    free it. `_release_face_vars` existed to detach them — but nothing ever
+    registered a variable with it, so it looped zero times and the list was
+    always empty. An audit measured 480 leaked variables over 80 re-renders.
+    """
+    view, _ = build(faces_per_image=2)
+
+    def tcl_vars() -> int:
+        return len([n for n in app.tk.call("info", "vars") if str(n).startswith("PY_VAR")])
+
+    before = tcl_vars()
+    for _ in range(30):
+        view.next_image()
+        view.previous_image()
+    growth = tcl_vars() - before
+    assert growth <= 12, f"leaked {growth} Tcl variables over 60 re-renders"
+
+
+def test_the_build_tab_reports_its_own_unsaved_work(app, build) -> None:  # type: ignore[no-untyped-def]
+    """Closing must not silently discard annotations.
+
+    has_unsaved_changes consulted only the Edit tab, so a folder's worth of
+    typed names, groups and include ticks vanished without a prompt.
+    """
+    view, _ = build()
+    assert app.has_unsaved_changes() is False
+    view.set_name(0, "somebody-i-typed")
+    assert view.entries[view.current_index].edited is True
+    assert app.has_unsaved_changes() is True
+
+
+def test_closing_asks_before_discarding_build_work(app, build) -> None:  # type: ignore[no-untyped-def]
+    view, _ = build()
+    view.set_include(0, False)
+    asked: list[bool] = []
+    app.close(confirm=lambda: asked.append(True) or False)  # user declines
+    assert asked, "the confirm callback was never consulted"
+    assert app.closed is False, "the window closed despite the user declining"
+
+
+def test_the_detection_score_reaches_the_live_detector(app, build) -> None:  # type: ignore[no-untyped-def]
+    """The spinbox was ticked as done in todo.md while no such control existed."""
+
+    class Recording:
+        def __init__(self) -> None:
+            self.applied: list[float] = []
+
+        def set_score_threshold(self, value: float) -> None:
+            self.applied.append(value)
+
+    view, fake = build()
+    fake.detector = Recording()  # type: ignore[attr-defined]
+    app._score_threshold_var.set(0.42)
+    assert app.apply_score_threshold() == pytest.approx(0.42)
+    assert fake.detector.applied == [pytest.approx(0.42)]  # type: ignore[attr-defined]
+
+
+def test_the_detection_score_is_clamped(app) -> None:  # type: ignore[no-untyped-def]
+    for raw, expected in ((5.0, 0.99), (-1.0, 0.10), (0.55, 0.55)):
+        app._score_threshold_var.set(raw)
+        assert app.apply_score_threshold() == pytest.approx(expected)

@@ -9,6 +9,80 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.6.0] — 2026-09-02
+
+An audit of every documented claim against the code. It found 25 confirmed
+discrepancies, several of them real defects rather than prose. Resize moves to
+0.7.0.
+
+### Added
+
+- **Detection-score control** in the Build tab — a spinbox, 0.10–0.99, default
+  0.9, applied to the live detector rather than by rebuilding it, so cached
+  embeddings survive. `YuNetDetector.set_score_threshold()` and
+  `App.apply_score_threshold()` support it.
+
+  This was **ticked as done in `todo.md` since 0.4.0 while no such control
+  existed**, and the bullet describing it was deleted from `versions.md` in the
+  same commit that ticked the box. Implementing it was the honest remedy.
+- `tests/unit/test_declared_dependencies.py` — asserts `requirements*.txt`
+  matches `pyproject.toml` and the README badge matches the declared version.
+  Comments claiming files are "kept in step" are not mechanisms.
+
+### Fixed
+
+- **Face-card Tk variables leaked.** `_release_face_vars` existed to detach
+  traces, but nothing ever registered a variable with it, so it looped zero
+  times. Measured 480 leaked Tcl variables over 80 re-renders; now 0. The
+  docstring had confidently described protection that did not exist — and an
+  earlier changelog credited this mechanism with removing a warning that the
+  `update_idletasks` change in the same commit actually fixed.
+- **Closing discarded Build-tab work silently.** `has_unsaved_changes` consulted
+  only the Edit tab, so typed names, groups and include ticks vanished with no
+  prompt.
+- **`requirements.txt` omitted `Pillow`**, so an environment pinned from it got a
+  working library and a GUI that crashed on import — while the file's own comment
+  claimed it was kept in step with `pyproject.toml`.
+- **`PickleStore.load` enumerated the exceptions it expected**, so a pickle whose
+  `GLOBAL` opcode names an uninstalled module raised `ModuleNotFoundError` out of
+  the library instead of `PickleSchemaError`.
+- **`publish.yml` claimed "the same checks as CI"** while installing neither
+  `python3-tk` nor `xvfb`, so all GUI tests skipped silently on a release, and it
+  had no coverage gate. It now runs them under `xvfb` with the gate.
+- **`python -m build` was documented but not installable** — `build` and `twine`
+  were missing from the `dev` extra the README tells you to install.
+
+### Corrected documentation
+
+- `errors.py` claimed every exception descends from `AlchemyFaceError`. It does
+  not: `cv2.error` escapes when a file on disk is not loadable ONNX, and
+  `ValueError` / `RuntimeError` escape from argument and camera failures.
+- The README's "a working install is a few megabytes" was wrong by two orders of
+  magnitude — the runtime dependencies are ~160 MB installed, mostly OpenCV.
+- The spec understated the personal-data inventory: it said the production `.pkl`
+  databases were left in the original directory. They are in `_local/`. Being
+  wrong there matters more than anywhere else.
+- The spec's "L2 between 11.5 and 13.6" was each file's *first* entry, not the
+  range. Across all 90 entries it is 9.75–14.59.
+- The spec described `id` type variation as per-file; in
+  `face_data_26_08_2025_paloma.pkl` it is per-entry — 46 `int` and 7 `str` in one
+  list, which is why every id is coerced individually.
+- Test counts in four places conflated "collected", "passing" and "run without a
+  display". Corrected and disambiguated.
+- `detect_worker.submit` claimed re-submission "does nothing"; only *background*
+  re-submissions are dropped, by design.
+- `cli.py` claimed a module-scope tkinter import would break `import
+  alchemyface`; it would not, since the package never imports `cli`.
+- The Inspect DB table has seven columns, not the six the README listed, and the
+  `alchemyface db` transcript omitted two of its five printed lines.
+- `app.py`'s module docstring still said the Edit tab was forthcoming.
+
+### Notes
+
+- Every fix carries a test, and each new test was verified to **fail** with its
+  fix reverted — the discipline that would have caught the no-op above.
+- 326 tests collected; 260 run without a display.
+
 ## [0.5.0] — 2026-09-01
 
 The Edit DB tab, and a correction.
@@ -47,7 +121,10 @@ The Edit DB tab, and a correction.
 
 ### Notes
 
-- 312 tests, 240 of them needing no display.
+- 313 tests collected; 252 of them run without a display. (An earlier draft of
+  this line said "312 tests, 240 of them needing no display" — 240 is the count
+  under CI's fast-path filter, which also excludes the `models` and `camera`
+  markers, not the display-free count.)
 
 ## [0.4.1] — 2026-09-01
 
@@ -162,7 +239,8 @@ proven here so the large views that follow have nothing to prove but themselves.
   fails with an `apt-get install python3-tk` hint rather than a traceback.
 - `App.close()` is idempotent. `tk.Tk.destroy()` raises on an already-destroyed
   window, so a close handler firing twice would have crashed on exit.
-- 162 tests, 95% coverage locally with weights present; 91% without.
+- 164 tests collected at this tag, 163 passing; 95% coverage locally with the
+  weights present, 91% without.
 
 ## [0.2.0] — 2026-09-01
 
@@ -192,7 +270,7 @@ additions are useful on their own.
 - Verified against all three production databases: values load byte-identically
   to the original app's reader, and a database written here loads back in that
   app with its vectors intact.
-- 123 tests, coverage held at 91%.
+- 130 tests collected at this tag, 129 passing; coverage 91%.
 
 ## [0.1.0] — 2026-08-28
 
@@ -222,7 +300,8 @@ First release. Extracted from an earlier prototype into a typed, installable lib
 - 88 tests at 91% coverage. The default suite needs no models, camera or
   network; model-backed tests are marked and skip when weights are absent.
 
-[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.6.0
 [0.5.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.5.0
 [0.4.1]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.0
