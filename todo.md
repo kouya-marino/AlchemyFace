@@ -73,16 +73,16 @@ merge, not as they are written.
 
 ## Later
 
-### 0.4.0 · Build DB — NEXT
-- [ ] Port `annotation_view.py`, translating `(N, 15)` rows to `Face`.
-- [ ] Keep the concurrency design intact: priority queue, generation counters,
+### 0.4.0 · Build DB — DONE
+- [x] Port `annotation_view.py`, translating `(N, 15)` rows to `Face`.
+- [x] Keep the concurrency design intact: priority queue, generation counters,
       `queue.Queue` hand-off to the Tk thread, BGR LRU cache, clean shutdown.
-- [ ] Keep the responsiveness work: 80 ms debounced canvas resize, cached
+- [x] Keep the responsiveness work: 80 ms debounced canvas resize, cached
       `PhotoImage` keyed on (path, canvas size), 50 ms completion polling.
-- [ ] Detection-score spinbox wired to the live detector.
-- [ ] Save flow with name validation and on-demand embedding fill-in.
+- [x] Detection-score spinbox wired to the live detector.
+- [x] Save flow with name validation and on-demand embedding fill-in.
 
-### 0.5.0 · Edit DB
+### 0.5.0 · Edit DB — NEXT
 - [ ] Port `edit_db_view.py` onto `PickleStore` — drop the duplicated
       `_normalize_db`.
 - [ ] Unsaved-changes tracking and close confirmation.

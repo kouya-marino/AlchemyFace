@@ -26,10 +26,16 @@ def _require_display() -> None:
 
 @pytest.fixture()
 def app() -> Iterator[object]:
-    """A live App window, destroyed afterwards even if the test fails."""
-    from alchemyface.gui.app import App
+    """A live App window with a recording reporter, always destroyed after.
 
-    window = App()
+    The reporter matters: constructing a real modal dialog while the detection
+    worker is alive segfaulted, so no test may ever open one. Assertions read
+    `app.reporter.errors` / `.infos` instead.
+    """
+    from alchemyface.gui.app import App
+    from alchemyface.gui.reporting import RecordingReporter
+
+    window = App(reporter=RecordingReporter())
     window.withdraw()  # keep it off screen; it still builds and behaves
     try:
         yield window

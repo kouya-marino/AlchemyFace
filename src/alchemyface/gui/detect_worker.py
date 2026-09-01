@@ -80,8 +80,15 @@ class DetectionWorker:
         self._stopped = False
         self._lock = threading.Lock()
         self._in_flight: set[tuple[int, int]] = set()
-        """(generation, index) pairs already queued, so re-submitting the same
-        image while it is pending does not detect it twice."""
+        """(generation, index) pairs currently queued or running, so
+        re-submitting the same image while it is pending does not detect it
+        twice."""
+
+        self._completed: set[tuple[int, int]] = set()
+        """(generation, index) pairs already detected. Needed because a caller
+        cannot tell "still queued" from "finished but not yet collected": the
+        result sits in a queue the UI thread drains on a timer. Without this,
+        a submission landing in that window detects the same image again."""
 
     # -------------------------------------------------------------- state
     @property
@@ -114,10 +121,24 @@ class DetectionWorker:
         with self._lock:
             self._generation += 1
             self._in_flight.clear()
+            self._completed.clear()
             current = self._generation
         self._clear(self._jobs)
         self._clear(self._results)
         return current
+
+    def forget(self, index: int) -> None:
+        """Discard what is known about one image, so it can be detected again.
+
+        Re-detect asks for work on an image already marked complete, which the
+        completion record would otherwise skip. Forgetting is deliberately
+        explicit: silently allowing repeats would reintroduce the double
+        detection the record exists to prevent.
+        """
+        with self._lock:
+            key = (self._generation, index)
+            self._completed.discard(key)
+            self._in_flight.discard(key)
 
     @staticmethod
     def _clear(q: queue.Queue[Any]) -> None:
@@ -139,8 +160,14 @@ class DetectionWorker:
             return
         with self._lock:
             key = (self._generation, index)
-            if key in self._in_flight:
+            if key in self._completed:
                 return
+            if key in self._in_flight and not foreground:
+                return
+            # A foreground submission for something already queued is allowed
+            # through, so navigating to an image waiting behind a folder
+            # prefetch moves it to the front. The duplicate job is skipped in
+            # the loop once the first has completed.
             self._in_flight.add(key)
             generation = self._generation
         self._jobs.put(
@@ -186,6 +213,8 @@ class DetectionWorker:
             with self._lock:
                 if job.generation != self._generation:
                     continue  # the folder changed while this waited
+                if (job.generation, job.index) in self._completed:
+                    continue  # a duplicate raised for priority; already done
             self._run(job)
 
     def _run(self, job: _Job) -> None:
@@ -199,7 +228,9 @@ class DetectionWorker:
 
     def _finish(self, job: _Job, faces: list[Face] | None, error: str | None) -> None:
         with self._lock:
-            self._in_flight.discard((job.generation, job.index))
+            key = (job.generation, job.index)
+            self._in_flight.discard(key)
+            self._completed.add(key)
         self._results.put(
             DetectionResult(
                 index=job.index,

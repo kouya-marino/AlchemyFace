@@ -9,6 +9,62 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [0.4.0] — 2026-09-01
+
+The Build DB tab: a folder of photos becomes a database the robot can load.
+
+### Added
+
+- **Build DB tab** — three panes. Sidebar of images with status glyphs, the
+  current image with numbered face boxes, and one panel per face carrying a
+  thumbnail, Include, Name and Group.
+- Background detection with priorities: the image on screen is detected first,
+  the rest of the folder follows, and the sidebar fills in without navigating.
+- Click a box on the canvas to select that face. Excluded faces draw dashed.
+- Re-detect, which asks before discarding edits and does not nag otherwise.
+- Group presets shared across tabs; typing a new group adds it.
+- Save writes every included, named face as a robot-format `.pkl`, computing
+  any embedding not already cached and renumbering ids from `"0"`.
+- `alchemyface.gui.annotation_data` — models, sidebar state, canvas geometry and
+  save validation as pure functions.
+- `alchemyface.gui.detect_worker` — the threading, knowing nothing of Tk or
+  OpenCV, so it is tested with a fake detector.
+
+### Notes
+
+- Embeddings are **not** normalised. The robot's schema stores raw SFace output,
+  and `SFaceEmbedder(normalize=False)` from 0.2.0 supplies it. Verified on real
+  photos: L2 norms between 9.8 and 13.9.
+- Installing a different recognizer discards cached embeddings. Keeping them
+  would silently mix vectors from two models into one database, which no
+  threshold can then separate.
+- The detection worker records what it has **completed**, not only what is in
+  flight. A caller cannot distinguish "still queued" from "finished but not yet
+  collected", and a submission landing in that window used to detect the same
+  image twice. `forget()` lets Re-detect ask again deliberately.
+- Tk variables bound to the face panels are held by the view. Left to garbage
+  collection they were destroyed after the interpreter had gone, raising
+  "main thread is not in main loop"; holding them also cut the GUI suite from
+  29s to 8s.
+- `Image.LANCZOS` replaced with `Image.Resampling.LANCZOS`, the Pillow 10 name.
+- Reporting is injected rather than hard-coded. Views took `tkinter.messagebox`
+  directly, so testing a failure path meant constructing a real modal dialog.
+  `Reporter` / `DialogReporter` / `RecordingReporter` replace it, and no test
+  opens a window.
+- The recognizer *provider* handed to the Build tab is called from its worker
+  thread, so it no longer touches Tk. It previously set a status variable there,
+  which is undefined behaviour off the main thread. Loading moved to
+  `ensure_recognizer`, called on the main thread when a folder is opened.
+- `AnnotationView.shutdown()` waits for its worker. Signalling and walking away
+  left a thread holding references to Tk objects that were about to be
+  destroyed.
+- 241 tests, 195 of them needing no display. The GUI suite was segfaulting
+  intermittently on macOS system Tk 8.5.9 — roughly one run in ten — because the
+  test settle-helper both drained results and called a full `update`, rendering
+  every result twice and churning `ImageTk.PhotoImage`. It now drains once and
+  flushes idle tasks: 20 consecutive clean runs. CI uses Tk 8.6, where the
+  problem does not arise.
+
 ## [0.3.0] — 2026-09-01
 
 The desktop application arrives, deliberately as its smallest useful slice: the
@@ -107,7 +163,8 @@ First release. Extracted from an earlier prototype into a typed, installable lib
 - 88 tests at 91% coverage. The default suite needs no models, camera or
   network; model-backed tests are marked and skip when weights are absent.
 
-[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.2.0
 [0.1.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.1.0

@@ -271,3 +271,87 @@ def test_the_worker_thread_is_a_daemon(worker_factory) -> None:  # type: ignore[
     worker = worker_factory(lambda _p: [])
     assert worker.is_running
     assert worker._thread is not None and worker._thread.daemon  # noqa: SLF001
+
+
+def test_resubmitting_a_finished_image_does_not_detect_it_again(worker_factory) -> None:  # type: ignore[no-untyped-def]
+    """The window between finishing and being collected is real.
+
+    A result sits in a queue the UI thread drains on a timer, so a caller cannot
+    tell "still queued" from "finished but not collected". A submission landing
+    in that window must not detect the same image a second time.
+    """
+    calls: list[int] = []
+
+    def detect(path: Path) -> list[Face]:
+        calls.append(int(path.stem))
+        return [a_face()]
+
+    worker = worker_factory(detect)
+    worker.submit(0, Path("0.jpg"))
+    collect(worker, 1)  # finished, and collected
+    worker.submit(0, Path("0.jpg"))  # the eager folder loop asking again
+    worker.submit(0, Path("0.jpg"), foreground=True)
+    time.sleep(0.2)
+    assert calls == [0], calls
+
+
+def test_a_foreground_resubmit_can_still_jump_the_queue(worker_factory) -> None:  # type: ignore[no-untyped-def]
+    """Deduping must not cost the priority bump.
+
+    Navigating to an image sitting behind a whole-folder prefetch has to move it
+    to the front, so submitting it again at foreground priority is allowed.
+    """
+    release = threading.Event()
+    started = threading.Event()
+    order: list[int] = []
+
+    def detect(path: Path) -> list[Face]:
+        index = int(path.stem)
+        if index == 99:
+            started.set()
+            release.wait(TIMEOUT)
+        order.append(index)
+        return []
+
+    worker = worker_factory(detect)
+    worker.submit(99, Path("99.jpg"))
+    assert started.wait(TIMEOUT)
+    for i in range(1, 8):  # a folder prefetch
+        worker.submit(i, Path(f"{i}.jpg"), foreground=False)
+    worker.submit(7, Path("7.jpg"), foreground=True)  # user navigates to 7
+
+    release.set()
+    collect(worker, 8)
+    assert order[0] == 99
+    assert order[1] == 7, order
+    assert order.count(7) == 1, order
+
+
+def test_forget_allows_an_image_to_be_detected_again(worker_factory) -> None:  # type: ignore[no-untyped-def]
+    """Re-detect has to work despite the completion record.
+
+    Without forget(), the record that prevents double detection would also
+    prevent a deliberate second look — which is what Re-detect is.
+    """
+    calls: list[int] = []
+
+    def detect(path: Path) -> list[Face]:
+        calls.append(int(path.stem))
+        return [a_face()]
+
+    worker = worker_factory(detect)
+    worker.submit(0, Path("0.jpg"))
+    collect(worker, 1)
+    worker.submit(0, Path("0.jpg"))  # ignored, as it should be
+    time.sleep(0.1)
+    assert calls == [0]
+
+    worker.forget(0)
+    worker.submit(0, Path("0.jpg"))
+    collect(worker, 1)
+    assert calls == [0, 0]
+
+
+def test_forgetting_an_unknown_index_is_harmless(worker_factory) -> None:  # type: ignore[no-untyped-def]
+    worker = worker_factory(lambda _p: [])
+    worker.forget(999)

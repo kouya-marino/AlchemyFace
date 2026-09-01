@@ -60,28 +60,28 @@ enforce it, since on Debian and Ubuntu `tkinter` is a separate OS package and
 the mistake is invisible on a developer machine. A real 30-entry production
 database loads in the tab. 162 tests, 95% coverage.
 
+### 0.4.0 — Build DB · 2026-09-01
+
+A folder of photos becomes a database the robot can load.
+
+- Three panes: image sidebar with status glyphs, canvas with numbered face
+  boxes, one panel per face (thumbnail · Include · Name · Group).
+- Background detection with priorities, whole-folder prefetch, and generation
+  counters so opening a different folder abandons the old one.
+- Click-to-select on the canvas; excluded faces draw dashed. Re-detect asks
+  before discarding edits.
+- Save writes included, named faces as a robot-format `.pkl` with raw vectors
+  and ids renumbered from `"0"`.
+- `annotation_data` and `detect_worker` hold the logic and the threading, both
+  free of Tk, so 195 of the 241 tests need no display.
+
+**Verified** on the real models and real photos: 6 images, 7 faces, raw L2 norms
+between 9.8 and 13.9. One tight selfie found no face at all — which is what the
+Resize tab in 0.6.0 exists to fix.
+
 ---
 
 ## Planned
-
-### 0.4.0 — Build DB
-
-The core of the app, and the largest single piece.
-
-- Three-pane annotation view: image sidebar, canvas with numbered face boxes,
-  per-face panel (thumbnail · Include · Name · Group).
-- Background detection worker: priority queue, eager folder prefetch,
-  generation counters discarding stale jobs, BGR LRU cache, clean shutdown.
-- Sidebar status glyphs: `·` pending, `⚠` no face, `○ (0/N)`, `✓ (k/N)`.
-- Canvas: debounced resize, cached `PhotoImage`, click-to-select a face,
-  dashed outline when excluded.
-- Detection-score spinbox (0.10–0.99, default 0.9), Re-detect with a
-  confirm-if-edited prompt, embeddings computed on demand and cached.
-- Save flow: names validated, missing embeddings filled in, IDs renumbered
-  from `"0"`, distinct success and failure dialogs.
-
-**Done when:** a folder of photos becomes a `.pkl` the robot loads, and the
-UI stays responsive while a large folder detects in the background.
 
 ### 0.5.0 — Edit DB
 
