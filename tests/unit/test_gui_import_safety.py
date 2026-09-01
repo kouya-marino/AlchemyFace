@@ -87,9 +87,13 @@ from alchemyface.gui.annotation_data import (
 )
 from alchemyface.store import PickleStore
 
+from alchemyface.gui.detect_worker import DetectionWorker, DetectionResult
+
 assert_tkinter_is_blocked()
 assert fit_image(1000, 500, 400, 400).width == 400
 assert default_face_name("x", 0, 2) == "x_face1"
+w = DetectionWorker(detect=lambda _p: [])
+assert w.generation == 0 and not w.is_running
 store = PickleStore(dim=4)
 vector = np.zeros(4, dtype=np.float32)
 vector[0] = 11.0
