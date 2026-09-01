@@ -5,7 +5,7 @@ On Debian and Ubuntu, tkinter is a separate OS package (`python3-tk`) that a
 `import alchemyface` would fail on those systems — a silent regression of the
 0.1.0 library API for everyone who never wanted the GUI.
 
-This is the only test that catches it, because on a developer machine tkinter
+These are the only tests that catch it, because on a developer machine tkinter
 is present and the mistake is invisible.
 """
 
@@ -13,54 +13,86 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
-TK_MODULES = ("tkinter", "tkinter.ttk", "tkinter.filedialog", "tkinter.messagebox")
+# Installed as a meta-path finder in a subprocess so tkinter genuinely cannot be
+# imported. `find_spec` is the modern API and the only one that exists from
+# Python 3.12, which removed `find_module` — an earlier version of this file
+# used the legacy API and so blocked nothing on 3.12. The self-check at the end
+# of each script is what exposed that; without it these tests would have passed
+# vacuously.
+BLOCKER = """
+import sys
+
+
+class Blocker:
+    def find_spec(self, name, path=None, target=None):
+        if name == "tkinter" or name.startswith("tkinter."):
+            raise ImportError(f"No module named {name!r} (blocked by test)")
+        return None
+
+
+sys.meta_path.insert(0, Blocker())
+for _name in list(sys.modules):
+    if _name == "tkinter" or _name.startswith("tkinter."):
+        del sys.modules[_name]
+
+
+def assert_tkinter_is_blocked():
+    try:
+        import tkinter  # noqa: F401
+    except ImportError:
+        return
+    raise AssertionError("tkinter was importable - the blocker did not work")
+"""
+
+
+def run_blocked(body: str) -> subprocess.CompletedProcess[str]:
+    """Run `body` in a subprocess where tkinter cannot be imported."""
+    return subprocess.run(
+        [sys.executable, "-c", BLOCKER + body],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
 
 
 def test_library_imports_with_tkinter_unavailable() -> None:
-    """Import the whole public surface in a subprocess where tkinter is blocked."""
-    script = """
-import sys
-
-class Blocker:
-    def find_module(self, name, path=None):
-        if name == "tkinter" or name.startswith("tkinter."):
-            return self
-        return None
-    def load_module(self, name):
-        raise ImportError(f"No module named {name!r} (blocked by test)")
-
-sys.meta_path.insert(0, Blocker())
-for name in list(sys.modules):
-    if name == "tkinter" or name.startswith("tkinter."):
-        del sys.modules[name]
-
+    result = run_blocked("""
 import alchemyface
-from alchemyface import Recognizer, Face, Match, Recognition
+from alchemyface import Recognizer, Face, Match, Recognition, StoreEntry
 from alchemyface.store import PickleStore, InMemoryStore
 from alchemyface.detection import YuNetDetector
 from alchemyface.embedding import SFaceEmbedder
 from alchemyface import models, capture, pipeline, types, errors
 
-try:
-    import tkinter
-except ImportError:
-    pass
-else:
-    raise AssertionError("tkinter was importable — the blocker did not work")
-
+assert_tkinter_is_blocked()
 print("OK", alchemyface.__version__)
-"""
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+""")
     assert result.returncode == 0, (
-        f"importing alchemyface without tkinter failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        f"importing alchemyface without tkinter failed\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
-    assert result.stdout.startswith("OK")
+    assert result.stdout.startswith("OK"), result.stdout
+
+
+def test_pure_gui_helpers_import_without_tkinter() -> None:
+    """The presentation layer is deliberately Tk-free, so it must import too."""
+    result = run_blocked("""
+import numpy as np
+from alchemyface.gui.inspect_data import entry_rows, summarise
+from alchemyface.store import PickleStore
+
+assert_tkinter_is_blocked()
+store = PickleStore(dim=4)
+vector = np.zeros(4, dtype=np.float32)
+vector[0] = 11.0
+store.add("ada", vector, {"group": "ceo"})
+assert entry_rows(store)[0].norm == 11.0
+assert "1 entries" in str(summarise(store, None))
+print("OK")
+""")
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert result.stdout.strip() == "OK"
 
 
 def test_cli_module_imports_without_tkinter() -> None:
@@ -68,76 +100,28 @@ def test_cli_module_imports_without_tkinter() -> None:
 
     It may only reach for the GUI inside the body of the command that needs it.
     """
-    script = """
-import sys
-
-class Blocker:
-    def find_module(self, name, path=None):
-        if name == "tkinter" or name.startswith("tkinter."):
-            return self
-        return None
-    def load_module(self, name):
-        raise ImportError(f"No module named {name!r} (blocked by test)")
-
-sys.meta_path.insert(0, Blocker())
+    result = run_blocked("""
 from alchemyface.cli import app
+
+assert_tkinter_is_blocked()
 print("OK")
-"""
-    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+""")
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert result.stdout.strip() == "OK"
 
 
-def test_no_library_module_imports_tkinter_at_module_scope() -> None:
-    """A static check, so the failure names the offending file.
-
-    The subprocess tests above prove the behaviour; this one localises it.
-    """
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parent.parent.parent / "src" / "alchemyface"
-    offenders = []
-    for path in root.rglob("*.py"):
-        if "gui" in path.relative_to(root).parts:
-            continue  # the GUI is allowed to import tkinter, obviously
-        text = path.read_text()
-        for lineno, line in enumerate(text.splitlines(), 1):
-            stripped = line.strip()
-            if stripped.startswith(("import tkinter", "from tkinter")):
-                # An import inside a function body is fine; only module scope
-                # is a problem, and module scope means no leading whitespace.
-                if not line.startswith((" ", "\t")):
-                    offenders.append(f"{path.relative_to(root)}:{lineno}")
-    assert not offenders, f"tkinter imported at module scope in: {offenders}"
-
-
 def test_db_command_fails_helpfully_when_tkinter_is_missing() -> None:
     """Without tkinter the command must explain the fix, not traceback."""
-    script = """
-import sys
-
-class Blocker:
-    def find_module(self, name, path=None):
-        if name == "tkinter" or name.startswith("tkinter."):
-            return self
-        return None
-    def load_module(self, name):
-        raise ImportError(f"No module named {name!r} (blocked by test)")
-
-sys.meta_path.insert(0, Blocker())
-for name in list(sys.modules):
-    if name == "tkinter" or name.startswith("tkinter."):
-        del sys.modules[name]
-
+    result = run_blocked("""
 from typer.testing import CliRunner
 from alchemyface.cli import app
 
-result = CliRunner().invoke(app, ["db"])
-print("EXIT", result.exit_code)
-print(result.output)
-"""
-    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
-    assert result.returncode == 0, result.stderr
+assert_tkinter_is_blocked()
+outcome = CliRunner().invoke(app, ["db"])
+print("EXIT", outcome.exit_code)
+print(outcome.output)
+""")
+    assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "EXIT 3" in result.stdout, result.stdout
     assert "python3-tk" in result.stdout, result.stdout
 
@@ -147,5 +131,20 @@ def test_db_command_is_registered() -> None:
 
     from alchemyface.cli import app
 
-    out = CliRunner().invoke(app, ["--help"]).output
-    assert "db" in out
+    assert "db" in CliRunner().invoke(app, ["--help"]).output
+
+
+def test_no_library_module_imports_tkinter_at_module_scope() -> None:
+    """A static check, so a failure names the offending file.
+
+    The subprocess tests prove the behaviour; this one localises it.
+    """
+    root = Path(__file__).resolve().parent.parent.parent / "src" / "alchemyface"
+    offenders = []
+    for path in root.rglob("*.py"):
+        if "gui" in path.relative_to(root).parts:
+            continue  # the GUI is allowed to import tkinter, obviously
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if not line.startswith((" ", "\t")) and line.strip().startswith(("import tkinter", "from tkinter")):
+                offenders.append(f"{path.relative_to(root)}:{lineno}")
+    assert not offenders, f"tkinter imported at module scope in: {offenders}"
