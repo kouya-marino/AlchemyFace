@@ -64,9 +64,9 @@ discrepancies, several of them real defects rather than prose. Resize moves to
   wrong there matters more than anywhere else.
 - The spec's "L2 between 11.5 and 13.6" was each file's *first* entry, not the
   range. Across all 90 entries it is 9.75–14.59.
-- The spec described `id` type variation as per-file; in
-  `face_data_26_08_2025_paloma.pkl` it is per-entry — 46 `int` and 7 `str` in one
-  list, which is why every id is coerced individually.
+- The design notes described `id` type variation as per-file; in one production
+  database it is per-entry — 46 `int` and 7 `str` in the same list, which is why
+  every id is coerced individually.
 - Test counts in four places conflated "collected", "passing" and "run without a
   display". Corrected and disambiguated.
 - `detect_worker.submit` claimed re-submission "does nothing"; only *background*

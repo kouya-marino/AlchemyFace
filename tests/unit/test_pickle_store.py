@@ -194,7 +194,7 @@ def write_raw(path: Path, data: object) -> None:
 
 
 def test_load_accepts_int_ids(tmp_path: Path) -> None:
-    # face_data_26_08_2025_paloma.pkl stores ints.
+    # One production database stores int ids.
     p = tmp_path / "int_ids.pkl"
     write_raw(p, [(0, "ada", "ceo", basis(0)), (1, "grace", "staff", basis(1))])
     store = PickleStore(dim=4)
@@ -204,7 +204,7 @@ def test_load_accepts_int_ids(tmp_path: Path) -> None:
 
 
 def test_load_accepts_nested_1xN_vectors(tmp_path: Path) -> None:
-    # face_data_26_08_2025_paloma.pkl stores (1, 128), not (128,).
+    # One production database stores (1, 128), not (128,).
     p = tmp_path / "nested.pkl"
     write_raw(p, [("0", "ada", "ceo", basis(0).reshape(1, 4))])
     store = PickleStore(dim=4)
@@ -290,11 +290,9 @@ def test_schema_error_is_an_alchemyface_error() -> None:
 
 def test_real_databases_load(pkl_dir: Path) -> None:
     """The three production databases must load, with the counts we measured."""
-    expected = {
-        "face_data_26_08_2025_paloma.pkl": 53,
-        "face_db_20260511_check.pkl": 30,
-        "face_db_test.pkl": 7,
-    }
+    # Fixture names are deliberately neutral: the originals embedded a client
+    # name, which reached a public repository through this file.
+    expected = {"db_mixed_ids.pkl": 53, "db_thirty.pkl": 30, "db_small.pkl": 7}
     for name, count in expected.items():
         path = pkl_dir / name
         if not path.is_file():

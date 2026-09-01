@@ -122,7 +122,7 @@ def test_malformed_pickle_reports_the_reason(app, tmp_path: Path) -> None:  # ty
 
 def test_a_real_production_database_loads(app, pkl_dir: Path) -> None:  # type: ignore[no-untyped-def]
     """End to end on a real robot database. Counts only — never names."""
-    path = pkl_dir / "face_db_20260511_check.pkl"
+    path = pkl_dir / "db_thirty.pkl"
     if not path.is_file():
         pytest.skip("fixture missing")
     assert app.inspect_view.load(path) is True
