@@ -10,6 +10,9 @@ merge, not as they are written.
 project page; 0.2.0-0.4.0 shipped with a stale one because it was scheduled for
 1.0.0 instead.
 
+**Bump the README's pinned PyPI badge with the version.** CI fails if it
+disagrees with `pyproject.toml`, so this is enforced rather than remembered.
+
 ---
 
 ## Done — 0.2.0 · library groundwork

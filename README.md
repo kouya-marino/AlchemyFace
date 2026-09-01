@@ -1,6 +1,6 @@
 # AlchemyFace
 
-[![PyPI](https://img.shields.io/pypi/v/alchemyface.svg)](https://pypi.org/project/alchemyface/)
+[![PyPI](https://img.shields.io/badge/PyPI-v0.5.0-blue.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -234,6 +234,14 @@ There is deliberately no coverage badge. A hand-written percentage goes stale
 silently, and generating a real one needs either a third-party service or a bot
 committing to `main` — which the repository's commit-identity check refuses. The
 CI badge already means the gate passed, and that gate includes a coverage floor.
+
+The PyPI badge is **static and version-pinned**, not the usual dynamic
+`shields.io/pypi/v` one. That badge proved unreliable: PyPI's JSON API reports a
+stale `info.version` for some time after an upload, shields.io caches whatever it
+read for three hours (`max-age=10800`), and GitHub's image proxy then caches
+shields. The three compound, and the badge showed a version four releases behind.
+A pinned badge cannot be stale — and CI fails the build if it ever disagrees with
+`pyproject.toml`, so it cannot be forgotten either.
 
 Model-backed tests skip unless the weights are present:
 
