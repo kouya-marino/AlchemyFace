@@ -19,10 +19,20 @@ jobs:
       - name: Reject unexpected commit identities
         run: |
           ALLOWED='prashantrawatmailbox@gmail.com'
-          BAD=$(git log --format='%ae%n%ce' | sort -u | grep -vx "$ALLOWED" || true)
+          # Authors are the contributors — absolute.
+          BAD=$(git log --format='%ae' | sort -u | grep -vx "$ALLOWED" || true)
           if [ -n "$BAD" ]; then
-            echo "::error::commit identities other than ${ALLOWED} found:"
+            echo "::error::commits authored by someone other than ${ALLOWED}:"
             printf '  %s\n' $BAD
+            exit 1
+          fi
+          # Committers may also be GitHub itself: a merge-button merge is always
+          # committed by `GitHub <noreply@github.com>`.
+          BAD_C=$(git log --format='%ce' | sort -u \
+                  | grep -vx "$ALLOWED" | grep -vx 'noreply@github.com' || true)
+          if [ -n "$BAD_C" ]; then
+            echo "::error::commits committed by an unexpected identity:"
+            printf '  %s\n' $BAD_C
             exit 1
           fi
 

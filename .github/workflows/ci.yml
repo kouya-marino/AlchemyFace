@@ -29,13 +29,26 @@ jobs:
       - name: Reject unexpected commit identities
         run: |
           ALLOWED='prashantrawatmailbox@gmail.com'
-          BAD=$(git log --format='%ae%n%ce' | sort -u | grep -vx "$ALLOWED" || true)
+          # Authors are the contributors — this is the check that matters, and
+          # it stays absolute.
+          BAD=$(git log --format='%ae' | sort -u | grep -vx "$ALLOWED" || true)
           if [ -n "$BAD" ]; then
-            echo "::error::commit identities other than ${ALLOWED} found:"
+            echo "::error::commits authored by someone other than ${ALLOWED}:"
             printf '  %s\n' $BAD
             exit 1
           fi
-          echo "every commit is authored and committed by ${ALLOWED}"
+          # Committers may additionally be GitHub itself, because a merge made
+          # with the merge button is always committed by `GitHub
+          # <noreply@github.com>`. That is a mechanical fact about who applied
+          # the commit, not a claim about who wrote it.
+          BAD_C=$(git log --format='%ce' | sort -u \
+                  | grep -vx "$ALLOWED" | grep -vx 'noreply@github.com' || true)
+          if [ -n "$BAD_C" ]; then
+            echo "::error::commits committed by an unexpected identity:"
+            printf '  %s\n' $BAD_C
+            exit 1
+          fi
+          echo "every commit is authored by ${ALLOWED}"
 
   lint:
     runs-on: ubuntu-latest
