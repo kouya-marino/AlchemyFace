@@ -59,9 +59,17 @@ class FaceAnnotation:
 
 
 class EntryStatus(Enum):
-    """Where an image has got to, which drives its sidebar row."""
+    """Where an image has got to, which drives its sidebar row.
+
+    ``FAILED`` is separate from ``NO_FACE`` on purpose. Reporting a failure as
+    "no face detected" makes a broken model, an unreadable file or a missing
+    recognizer look like a legitimate result about the photograph — which once
+    led to a false claim in this project's own changelog about an image YuNet
+    supposedly could not handle.
+    """
 
     PENDING = "pending"
+    FAILED = "detection failed"
     NO_FACE = "no face detected"
     NONE_INCLUDED = "detected, nothing included"
     INCLUDED = "included"
@@ -74,6 +82,10 @@ class ImageEntry:
     path: Path
     detected: bool = False
     faces: list[FaceAnnotation] = field(default_factory=list)
+    error: str | None = None
+    """Why detection failed, if it did. Kept apart from an empty face list so a
+    failure is never shown as a finding about the photograph."""
+
     edited: bool = False
     """Set once a user changes something, so Re-detect can warn before
     discarding their work."""
@@ -86,6 +98,8 @@ class ImageEntry:
     def status(self) -> EntryStatus:
         if not self.detected:
             return EntryStatus.PENDING
+        if self.error is not None:
+            return EntryStatus.FAILED
         if not self.faces:
             return EntryStatus.NO_FACE
         if self.included_count == 0:
@@ -97,6 +111,7 @@ class ImageEntry:
 
 _GLYPHS = {
     EntryStatus.PENDING: "·",
+    EntryStatus.FAILED: "✗",
     EntryStatus.NO_FACE: "⚠",
     EntryStatus.NONE_INCLUDED: "○",
     EntryStatus.INCLUDED: "✓",
@@ -104,6 +119,7 @@ _GLYPHS = {
 
 _COLOURS = {
     EntryStatus.PENDING: "#888888",
+    EntryStatus.FAILED: "#cc2200",
     EntryStatus.NO_FACE: "#cc7700",
     EntryStatus.NONE_INCLUDED: "#666666",
     EntryStatus.INCLUDED: "#1a7d1a",
@@ -118,6 +134,8 @@ def default_face_name(stem: str, index: int, total: int) -> str:
 def sidebar_text(entry: ImageEntry) -> str:
     """One sidebar row: a status glyph, the filename, and the included ratio."""
     glyph = _GLYPHS[entry.status]
+    if entry.status is EntryStatus.FAILED:
+        return f"{glyph}  {entry.path.name}  ({entry.error})"
     if entry.status in (EntryStatus.PENDING, EntryStatus.NO_FACE):
         return f"{glyph}  {entry.path.name}"
     return f"{glyph}  {entry.path.name}  ({entry.included_count}/{len(entry.faces)})"

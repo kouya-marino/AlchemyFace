@@ -66,12 +66,17 @@ class AnnotationView(ttk.Frame):
         parent: tk.Misc,
         *,
         recognizer_provider: Callable[[], RecognizerLike | None],
+        ensure_recognizer: Callable[[], RecognizerLike | None] | None = None,
         group_presets_provider: Callable[[], list[str]],
         on_status: Callable[[str], None],
         on_preset_added: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._get_recognizer = recognizer_provider
+        self._ensure_recognizer = ensure_recognizer or recognizer_provider
+        """Two providers, because they run on different threads.
+        ``recognizer_provider`` is called from the worker and must never touch
+        Tk; ``ensure_recognizer`` is called from here and may load and report."""
         self._get_presets = group_presets_provider
         self._set_status = on_status
         self._on_preset_added = on_preset_added or (lambda _g: None)
@@ -127,8 +132,15 @@ class AnnotationView(ttk.Frame):
     def sidebar_labels(self) -> list[str]:
         return [self._listbox.get(i) for i in range(self._listbox.size())]
 
-    def load_folder(self, folder: Path) -> None:
-        """Read a folder, list it, and detect every image in the background."""
+    def load_folder(self, folder: Path) -> bool:
+        """Read a folder, list it, and detect every image in the background.
+
+        Refuses without a model rather than starting: every image would fail,
+        and the sidebar would fill with what looks like "no face detected".
+        """
+        if self._ensure_recognizer() is None:
+            self._set_status("No model loaded, so nothing can be detected.")
+            return False
         self._worker.new_generation()
         self._cache.clear()
         self._photo_key = None
@@ -150,7 +162,7 @@ class AnnotationView(ttk.Frame):
         if not self._entries:
             self._label_var.set("(no images)")
             self._set_status("No images found in that folder.")
-            return
+            return True
 
         self._worker.start()
         self._start_polling()
@@ -160,6 +172,7 @@ class AnnotationView(ttk.Frame):
         for index, entry in enumerate(self._entries):
             self._worker.submit(index, entry.path, foreground=False)
         self._set_status(f"Loaded {len(self._entries)} images — detecting in the background.")
+        return True
 
     def wait_until_settled(self, timeout: float = 10.0) -> bool:
         """Collect finished detections until every image has one.
@@ -264,6 +277,7 @@ class AnnotationView(ttk.Frame):
             return
         entry.detected = False
         entry.faces = []
+        entry.error = None
         entry.edited = False
         self._selected_face = None
         self._cache.drop(entry.path)
@@ -390,6 +404,7 @@ class AnnotationView(ttk.Frame):
             entry.detected = True
             entry.edited = False
             entry.faces = []
+            entry.error = result.error
             if result.error is not None:
                 self._set_status(f"{entry.path.name}: {result.error}")
             else:
@@ -597,6 +612,15 @@ class AnnotationView(ttk.Frame):
         entry = self._entries[self._current]
         if entry.status is EntryStatus.PENDING:
             ttk.Label(self._right_inner, text="(detecting…)", padding=8).pack()
+            return
+        if entry.status is EntryStatus.FAILED:
+            ttk.Label(
+                self._right_inner,
+                text=f"Detection failed:\n{entry.error}",
+                padding=8,
+                foreground="#cc2200",
+                wraplength=290,
+            ).pack()
             return
         if not entry.faces:
             ttk.Label(

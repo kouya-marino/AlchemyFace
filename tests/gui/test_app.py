@@ -36,9 +36,9 @@ def test_window_opens_with_a_title_and_the_version(app) -> None:  # type: ignore
 
 
 def test_only_the_implemented_tabs_are_present(app) -> None:  # type: ignore[no-untyped-def]
-    # Tabs arrive one version at a time; no dead placeholders. Edit and Resize
-    # are not here yet and must not appear until they work.
-    assert app.tab_labels() == ["Build DB", "Inspect DB"]
+    # Tabs arrive one version at a time; no dead placeholders. Resize is not
+    # here yet and must not appear until it works.
+    assert app.tab_labels() == ["Build DB", "Edit DB", "Inspect DB"]
 
 
 def test_status_starts_ready_and_can_be_set(app) -> None:  # type: ignore[no-untyped-def]
