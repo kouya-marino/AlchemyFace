@@ -80,9 +80,16 @@ def test_pure_gui_helpers_import_without_tkinter() -> None:
     result = run_blocked("""
 import numpy as np
 from alchemyface.gui.inspect_data import entry_rows, summarise
+from alchemyface.gui.annotation_data import (
+    BgrCache, EntryStatus, FaceAnnotation, ImageEntry,
+    default_face_name, face_at, fit_image, records_for_save,
+    sidebar_colour, sidebar_text, validate_for_save,
+)
 from alchemyface.store import PickleStore
 
 assert_tkinter_is_blocked()
+assert fit_image(1000, 500, 400, 400).width == 400
+assert default_face_name("x", 0, 2) == "x_face1"
 store = PickleStore(dim=4)
 vector = np.zeros(4, dtype=np.float32)
 vector[0] = 11.0
