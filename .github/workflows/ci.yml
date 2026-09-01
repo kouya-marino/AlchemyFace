@@ -66,6 +66,24 @@ jobs:
       - name: Type check
         run: mypy src/alchemyface
 
+      # The README's PyPI badge is static, because the dynamic one showed a
+      # version four releases behind: PyPI's JSON API lags after an upload,
+      # shields.io caches it for three hours, and GitHub's proxy caches shields.
+      # Static means it cannot be stale; this check means it cannot be forgotten.
+      - name: README PyPI badge must match the declared version
+        run: |
+          DECLARED=$(python -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          BADGE=$(grep -oE 'PyPI-v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | sed 's/^PyPI-v//')
+          echo "pyproject=${DECLARED}  README badge=${BADGE:-<none>}"
+          if [ -z "$BADGE" ]; then
+            echo "::error::no version-pinned PyPI badge found in README.md"
+            exit 1
+          fi
+          if [ "$DECLARED" != "$BADGE" ]; then
+            echo "::error::README PyPI badge says v${BADGE} but pyproject.toml declares ${DECLARED}"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
     strategy:
