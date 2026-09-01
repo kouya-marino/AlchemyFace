@@ -5,8 +5,8 @@ recognizer — and delegates everything else. Each tab receives what it needs as
 callables, so a tab can be built and driven in a test without the window knowing
 anything about it.
 
-Tabs arrive one version at a time. Build DB, Edit DB and Inspect DB are here;
-Resize is still to come.
+Four tabs: Build DB, Edit DB, Resize and Inspect DB — the same set as the
+application this was ported from.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from alchemyface.gui.annotation_view import AnnotationView, RecognizerLike
 from alchemyface.gui.edit_db_view import EditDBView
 from alchemyface.gui.inspect_view import InspectView
 from alchemyface.gui.reporting import DialogReporter, Reporter
+from alchemyface.gui.resize_view import ResizeView
 from alchemyface.store import PickleStore
 
 WINDOW_TITLE = "AlchemyFace — Face DB Builder"
@@ -188,9 +189,11 @@ class App(tk.Tk):
 
         build_tab = ttk.Frame(self.notebook)
         edit_tab = ttk.Frame(self.notebook)
+        resize_tab = ttk.Frame(self.notebook)
         inspect_tab = ttk.Frame(self.notebook)
         self.notebook.add(build_tab, text="Build DB")
         self.notebook.add(edit_tab, text="Edit DB")
+        self.notebook.add(resize_tab, text="Resize")
         self.notebook.add(inspect_tab, text="Inspect DB")
         self._build_build_tab(build_tab)
 
@@ -207,6 +210,9 @@ class App(tk.Tk):
             reporter=self.reporter,
         )
         self.edit_view.pack(fill=tk.BOTH, expand=True)
+
+        self.resize_view = ResizeView(resize_tab, on_status=self.set_status, reporter=self.reporter)
+        self.resize_view.pack(fill=tk.BOTH, expand=True)
 
         self.inspect_view = InspectView(inspect_tab, on_status=self.set_status, reporter=self.reporter)
         self.inspect_view.pack(fill=tk.BOTH, expand=True)
@@ -389,7 +395,7 @@ class App(tk.Tk):
         if confirm is not None and self.has_unsaved_changes() and not confirm():
             return
         self._closed = True
-        for name in ("annotation_view", "edit_view", "inspect_view"):
+        for name in ("annotation_view", "edit_view", "resize_view", "inspect_view"):
             view = getattr(self, name, None)
             shutdown = getattr(view, "shutdown", None)
             if callable(shutdown):

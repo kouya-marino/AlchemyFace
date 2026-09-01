@@ -1,6 +1,6 @@
 # AlchemyFace
 
-[![PyPI](https://img.shields.io/badge/PyPI-v0.6.0-blue.svg)](https://pypi.org/project/alchemyface/)
+[![PyPI](https://img.shields.io/badge/PyPI-v1.0.0-blue.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -160,7 +160,38 @@ Open an existing database and change it.
   best cosine similarity, so a second photo of someone is an improvement.
 - **Save** writes over the loaded path; **Save as…** writes elsewhere.
 
-*Resize is planned — see [versions.md](versions.md).*
+### Resize
+
+Shrink photos until the detector can see the face again.
+
+YuNet's largest anchors miss a face that fills most of the frame — which is what
+a phone selfie held at arm's length looks like. Resizing recovers it:
+
+```
+selfie 426x546, face ~93% of frame   ->  0 faces detected
+resized to 0.5   213x273             ->  1 face detected
+```
+
+Detection is **not monotonic** in the ratio, because it depends on the face
+matching an anchor scale. In that same example 0.25 finds nothing while 0.15
+works again — so if one ratio fails, try another.
+
+- Source and output each take **a folder or a single image**.
+- Output defaults beside the source: `photos` → `photos_resized`,
+  `face.jpg` → `face_resized.jpg`.
+- **Ratio** 0.05–5.0, default 0.5. LANCZOS when shrinking, BICUBIC when growing,
+  EXIF orientation applied, and near-lossless saves (JPEG q95 subsampling 0,
+  WebP q95 method 6) because these images are about to be enrolled and
+  compression artefacts move the embedding.
+- Writing over the source is refused — a resize cannot be undone.
+- A per-file log; one unreadable file does not abandon the batch.
+
+The same work from the command line:
+
+```bash
+alchemyface resize --folder photos/ --ratio 0.5
+alchemyface resize --image selfie.jpg --output smaller.jpg --ratio 0.25
+```
 
 ### The `.pkl` schema
 

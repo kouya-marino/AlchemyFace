@@ -188,3 +188,81 @@ def test_download_models_skips_what_is_already_present(tmp_path: Path, monkeypat
     result = runner.invoke(cli.app, ["download-models"])
     assert result.exit_code == 0
     assert "already" in result.stdout.lower()
+
+
+# ------------------------------------------------------------------- resize
+
+
+def make_image(path: Path, width: int = 200, height: int = 100) -> Path:
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (width, height), (10, 120, 200)).save(path)
+    return path
+
+
+def test_resize_is_registered() -> None:
+    assert "resize" in runner.invoke(cli.app, ["--help"]).output
+
+
+def test_resize_a_folder(tmp_path: Path) -> None:
+    from PIL import Image
+
+    src = tmp_path / "in"
+    for name in ("a.png", "b.png"):
+        make_image(src / name, 200, 100)
+    result = runner.invoke(
+        cli.app, ["resize", "--folder", str(src), "--output", str(tmp_path / "out"), "--ratio", "0.5"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "2 resized, 0 failed" in result.output
+    assert Image.open(tmp_path / "out" / "a.png").size == (100, 50)
+
+
+def test_resize_a_folder_defaults_its_output(tmp_path: Path) -> None:
+    src = tmp_path / "photos"
+    make_image(src / "a.png")
+    result = runner.invoke(cli.app, ["resize", "--folder", str(src)])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "photos_resized" / "a.png").is_file()
+
+
+def test_resize_a_single_image(tmp_path: Path) -> None:
+    src = make_image(tmp_path / "in.png", 200, 100)
+    result = runner.invoke(cli.app, ["resize", "--image", str(src), "--output", str(tmp_path / "out.png")])
+    assert result.exit_code == 0, result.output
+    assert "200x100 -> 100x50" in result.output
+
+
+def test_resize_needs_exactly_one_source(tmp_path: Path) -> None:
+    src = tmp_path / "in"
+    make_image(src / "a.png")
+    both = runner.invoke(cli.app, ["resize", "--folder", str(src), "--image", str(src / "a.png")])
+    assert both.exit_code == 2
+    assert "exactly one" in both.output
+    assert runner.invoke(cli.app, ["resize"]).exit_code == 2
+
+
+def test_resize_clamps_an_absurd_ratio(tmp_path: Path) -> None:
+    src = make_image(tmp_path / "in.png", 100, 100)
+    result = runner.invoke(
+        cli.app,
+        ["resize", "--image", str(src), "--output", str(tmp_path / "o.png"), "--ratio", "99"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "clamped to 5.00" in result.output
+
+
+def test_resize_reports_an_empty_folder(tmp_path: Path) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    result = runner.invoke(cli.app, ["resize", "--folder", str(empty)])
+    assert result.exit_code == 1
+    assert "no images found" in result.output.lower()
+
+
+def test_resize_refuses_to_overwrite_its_own_source(tmp_path: Path) -> None:
+    src = make_image(tmp_path / "in.png")
+    result = runner.invoke(cli.app, ["resize", "--image", str(src), "--output", str(src)])
+    assert result.exit_code == 1
+    assert "same file" in result.output

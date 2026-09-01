@@ -9,6 +9,44 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [1.0.0] — 2026-09-02
+
+Parity. Every tab of the application this was ported from now exists here, on
+top of the published `alchemyface` library rather than a private wrapper.
+
+### Added
+
+- **Resize tab** and **`alchemyface resize`** — shrink photos until the detector
+  can see the face again. Folder or single image on both the source and output
+  side, ratio 0.05–5.0, per-file log, and a refusal to write over the source.
+- `alchemyface.gui.resize_data`: `resize_one`, `resize_folder`, `plan_folder`,
+  `clamp_ratio`, `default_output_folder`. No Tk, so the whole feature is tested
+  without a display.
+
+### Why the Resize tab exists — measured, not inherited
+
+YuNet's largest anchors miss a face filling most of the frame. Constructed from a
+real photo:
+
+```
+selfie 426x546, face ~93% of frame  ->  0 detected
+resized to 0.5  213x273             ->  1 detected
+```
+
+Detection is **not monotonic** in the ratio: 0.25 finds nothing while 0.15 works
+again, because it depends on the face matching an anchor scale. A test builds
+this case and fails if resizing ever stops helping.
+
+This matters because 0.4.0 originally justified the tab with a claim that a
+particular test photo could not be detected. That was false — detection had
+merely failed — and the claim was corrected in 0.5.0. The justification is now
+reproducible rather than asserted.
+
+### Notes
+
+- Four tabs, matching the original: Build DB, Edit DB, Resize, Inspect DB.
+- 377 tests; 279 run without a display.
+
 ## [0.6.0] — 2026-09-02
 
 An audit of every documented claim against the code. It found 25 confirmed
@@ -300,7 +338,8 @@ First release. Extracted from an earlier prototype into a typed, installable lib
 - 88 tests at 91% coverage. The default suite needs no models, camera or
   network; model-backed tests are marked and skip when weights are absent.
 
-[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/kouya-marino/AlchemyFace/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v1.0.0
 [0.6.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.6.0
 [0.5.0]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.5.0
 [0.4.1]: https://github.com/kouya-marino/AlchemyFace/releases/tag/v0.4.1

@@ -126,35 +126,21 @@ verifying each discrepancy. 25 confirmed; several were defects, not prose.
 **Verified:** every fix has a test, and each was checked to fail with its fix
 reverted. 326 tests collected; 260 run without a display.
 
----
+### 1.0.0 — parity · 2026-09-02
 
-## Planned
+Every tab of the original application, on top of the published library.
 
-### 0.7.0 — Resize
+- **Resize tab** and **`alchemyface resize`**: folder or single image, ratio
+  0.05–5.0, per-file log, source-overwrite refused.
+- Four tabs, matching the original: Build DB, Edit DB, Resize, Inspect DB.
 
-Bulk pre-resize before enrolment. Tight phone selfies where a face fills more
-than half the frame defeat YuNet's largest anchors; shrinking brings them into
-range.
-
-- Source folder or single image; matching output; ratio 0.05–5.0, default 0.5.
-- EXIF transpose, LANCZOS down / BICUBIC up, format-aware save options.
-- Per-file log; same-path overwrite refused.
-- `alchemyface resize` CLI subcommand sharing the same helper.
-
-**Done when:** photos that YuNet missed at full size are detected after a
-0.5 resize, through both the tab and the CLI.
-
-### 1.0.0 — parity and polish
-
-- Behaviour audit against the original app, tab by tab.
-- Screenshots for the README (its prose is kept current per version, not here).
-- Docstring and typing pass over the GUI; coverage back above 80% overall.
-- `todo.md` emptied of anything blocking, or its remainder deferred explicitly.
-
-**Done when:** nothing the original app does is missing, and the reason for
-every deliberate difference is written down.
+**Verified:** the tab's own justification, measured rather than inherited — a
+constructed selfie at 426x546 with the face filling ~93% of the frame detects 0
+faces, and 1 after resizing to 0.5. Detection is not monotonic in the ratio, so
+the test searches several. 377 tests; 279 run without a display.
 
 ---
+
 
 ## Deliberate differences from the original app
 

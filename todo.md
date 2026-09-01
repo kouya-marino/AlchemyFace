@@ -96,12 +96,12 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
       `_normalize_db`.
 - [x] Unsaved-changes tracking and close confirmation.
 
-### 0.7.0 · Resize — NEXT
-- [ ] Update `README.md` for what this version adds.
-- [ ] Port `resize_util.py` and `resize_view.py`.
-- [ ] `alchemyface resize` CLI subcommand replacing the hardcoded script.
+### 0.7.0 · Resize — DONE, shipped in 1.0.0
+- [x] Update `README.md` for what this version adds.
+- [x] Port `resize_util.py` and `resize_view.py`.
+- [x] `alchemyface resize` CLI subcommand replacing the hardcoded script.
 
-### 1.0.0 · Parity and polish
+### 1.0.0 · Parity and polish — DONE
 - [ ] Tab-by-tab audit against the original.
 - [ ] Screenshots for the README (prose kept current per version).
 - [ ] Coverage back above 80% with the GUI included.

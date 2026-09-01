@@ -35,10 +35,10 @@ def test_window_opens_with_a_title_and_the_version(app) -> None:  # type: ignore
     assert __version__ in app.title()
 
 
-def test_only_the_implemented_tabs_are_present(app) -> None:  # type: ignore[no-untyped-def]
-    # Tabs arrive one version at a time; no dead placeholders. Resize is not
-    # here yet and must not appear until it works.
-    assert app.tab_labels() == ["Build DB", "Edit DB", "Inspect DB"]
+def test_all_four_tabs_are_present(app) -> None:  # type: ignore[no-untyped-def]
+    # The same four the application was ported from, in the same order. Tabs
+    # arrived one version at a time and none was ever a dead placeholder.
+    assert app.tab_labels() == ["Build DB", "Edit DB", "Resize", "Inspect DB"]
 
 
 def test_status_starts_ready_and_can_be_set(app) -> None:  # type: ignore[no-untyped-def]
