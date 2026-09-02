@@ -166,6 +166,24 @@ this is not more careful prose but tests that assert the artefact a user touches
 callback, and every fix in this release was confirmed to fail with itself
 reverted. 404 tests; 281 run without a display.
 
+### 1.1.0 — the `-m` entry point, and two model-path bugs · 2026-09-02
+
+Prompted by a plain question — how do you launch this? The original was started
+with `python main.py`; writing down the equivalent here surfaced that the
+package could not be run with `-m` at all, and two bugs in the model paths.
+
+- **`python -m alchemyface`** now works, identical to the console script.
+  `python -m alchemyface.gui.app` goes straight to the window.
+- **`download-models --model-dir X` wrote nothing to X** when the cache already
+  held a copy — it said `already present at ~/.cache/…` and left X empty, while
+  the flag promised "Where to write the weights".
+- **`resolve(spec, model_dir=X)` ignored X when downloading**, writing to the
+  cache instead.
+- **`download()` leaked a raw `PermissionError`** for an unwritable destination,
+  the one model failure in that module needing an `OSError` catch. Found by
+  asking what the `resolve` fix newly made reachable, rather than after the
+  fact. 413 tests; 290 run without a display.
+
 ---
 
 

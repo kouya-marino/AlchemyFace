@@ -499,3 +499,9 @@ class App(tk.Tk):
 def main() -> None:
     """Entry point used by the ``alchemyface db`` command."""
     App().mainloop()
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised as a subprocess
+    # `python -m alchemyface.gui.app` launches the window directly, the closest
+    # equivalent to the original application's `python main.py`.
+    main()

@@ -1,6 +1,6 @@
 # AlchemyFace
 
-[![PyPI](https://img.shields.io/badge/PyPI-v1.0.0-blue.svg)](https://pypi.org/project/alchemyface/)
+[![PyPI](https://img.shields.io/badge/PyPI-v1.1.0-blue.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -11,7 +11,7 @@ and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recogniti
 
 ```bash
 pip install alchemyface
-alchemyface db          # the Face DB Builder
+alchemyface db          # the Face DB Builder  (or: python -m alchemyface db)
 ```
 
 ## Why
@@ -106,8 +106,12 @@ with VideoSource(0, width=1280, height=720) as camera:
 
 # The application
 
+Three equivalent ways in — use whichever suits where you are:
+
 ```bash
-alchemyface db
+alchemyface db                      # the installed console script
+python -m alchemyface db            # same thing, no reliance on PATH
+python -m alchemyface.gui.app       # straight to the window
 ```
 
 A Tkinter desktop app that turns folders of photos into a `.pkl` face database.
