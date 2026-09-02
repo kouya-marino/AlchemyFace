@@ -143,13 +143,18 @@ class AnnotationView(ttk.Frame):
         if self._ensure_recognizer() is None:
             self._set_status("No model loaded, so nothing can be detected.")
             return False
+        # Checked before anything is cleared. Opening the wrong folder by
+        # mistake used to discard a whole session's naming work and replace it
+        # with an empty list, which is not what "no images here" should cost.
+        images = sorted(path for path in folder.iterdir() if path.suffix.lower() in IMAGE_EXTENSIONS)
+        if not images and self._entries:
+            self._set_status(f"No images in {folder.name} — keeping the {len(self._entries)} already open.")
+            return False
         self._worker.new_generation()
         self._cache.clear()
         self._photo_key = None
         self._photo = None
-        self._entries = [
-            ImageEntry(path=path) for path in sorted(folder.iterdir()) if path.suffix.lower() in IMAGE_EXTENSIONS
-        ]
+        self._entries = [ImageEntry(path=path) for path in images]
         self._current = -1
         self._selected_face = None
 
@@ -424,6 +429,13 @@ class AnnotationView(ttk.Frame):
             if result.index == self._current:
                 self._render_canvas()
                 self._render_faces()
+                if result.error is None:
+                    # The status stayed on "detecting in the background" even
+                    # after the image on screen had finished, so there was no
+                    # way to tell a still-running detection from one that found
+                    # nothing.
+                    count = len(entry.faces)
+                    self._set_status(f"{entry.path.name}: {count} face(s) detected.")
 
     # ------------------------------------------------------------------ UI
 
@@ -572,13 +584,30 @@ class AnnotationView(ttk.Frame):
                     dash=() if face.include else (4, 3),
                 )
             )
-            self._canvas.create_text(
-                x1 + 4,
-                max(self._transform.offset_y, y1 - 14),
-                text=f"#{position + 1}",
-                anchor="nw",
-                fill=colour,
-                font=("TkDefaultFont", 9, "bold"),
+            # Drawn on a filled chip in the box's own colour, not as bare
+            # coloured text: over a light photo the number was unreadable, and
+            # the colour is what ties it to the row in the face panel.
+            label_x = x1 + 4
+            label_y = max(self._transform.offset_y, y1 - 18)
+            self._box_items.append(
+                self._canvas.create_rectangle(
+                    label_x - 2,
+                    label_y - 2,
+                    label_x + 24,
+                    label_y + 14,
+                    fill=colour,
+                    outline=colour,
+                )
+            )
+            self._box_items.append(
+                self._canvas.create_text(
+                    label_x,
+                    label_y,
+                    text=f"#{position + 1}",
+                    anchor="nw",
+                    fill="black",
+                    font=("TkDefaultFont", 9, "bold"),
+                )
             )
 
     # ---------------------------------------------------------- face panel

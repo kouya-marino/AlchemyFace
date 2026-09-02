@@ -368,3 +368,72 @@ def test_load_of_a_missing_file_is_still_a_schema_error(tmp_path: Path) -> None:
 def test_load_of_a_directory_is_a_schema_error(tmp_path: Path) -> None:
     with pytest.raises(PickleSchemaError):
         PickleStore(dim=4).load(tmp_path)
+
+
+# ------------------------------------------------------- the lenient read path
+#
+# A database is opened in the inspector because something is suspected wrong
+# with it, and in the editor to delete the offending rows. Refusing to load one
+# with a bad vector withheld the diagnosis and made repair impossible.
+
+
+def _broken_database(path: Path) -> Path:
+    good = np.ones(128, dtype=np.float32)
+    nan = np.full(128, np.nan, dtype=np.float32)
+    short = np.ones(64, dtype=np.float32)
+    with open(path, "wb") as handle:
+        pickle.dump(
+            [("1", "ada", "ceo", good), ("2", "grace", "staff", nan), ("3", "linus", "staff", short)],
+            handle,
+        )
+    return path
+
+
+def test_a_strict_load_still_refuses_a_bad_vector(tmp_path: Path) -> None:
+    store = PickleStore()
+    with pytest.raises(PickleSchemaError, match="NaN or infinity"):
+        store.load(_broken_database(tmp_path / "broken.pkl"))
+
+
+def test_a_lenient_load_shows_every_entry_and_names_the_problems(tmp_path: Path) -> None:
+    store = PickleStore()
+    problems = store.load_leniently(_broken_database(tmp_path / "broken.pkl"))
+    assert len(store) == 3
+    assert [entry.label for entry in store.entries()] == ["ada", "grace", "linus"]
+    assert any("NaN" in problem for problem in problems)
+    assert any("dimension 64" in problem for problem in problems)
+
+
+def test_a_lenient_load_of_a_clean_database_complains_about_nothing(tmp_path: Path) -> None:
+    store = PickleStore()
+    store.add("ada", np.ones(128, dtype=np.float32), {"group": "ceo"})
+    store.save(tmp_path / "clean.pkl")
+    reader = PickleStore()
+    assert reader.load_leniently(tmp_path / "clean.pkl") == []
+    assert len(reader) == 1
+
+
+def test_a_lenient_load_still_refuses_something_that_is_not_a_database(tmp_path: Path) -> None:
+    """Tolerance is for bad vectors, not for a file that is not a database."""
+    path = tmp_path / "nonsense.pkl"
+    with open(path, "wb") as handle:
+        pickle.dump("just a string", handle)
+    with pytest.raises(PickleSchemaError, match="expected a list"):
+        PickleStore().load_leniently(path)
+
+
+def test_the_dict_form_numbers_entries_by_position(tmp_path: Path) -> None:
+    """A random uuid differed on every load, so the ID column could not be used
+    to refer to a row or to compare two views of the same file."""
+    path = tmp_path / "dict.pkl"
+    with open(path, "wb") as handle:
+        pickle.dump({"ada": np.ones(128, dtype=np.float32), "grace": np.full(128, 2.0, dtype=np.float32)}, handle)
+
+    first = PickleStore()
+    first.load(path)
+    ids = [entry.entry_id for entry in first.entries()]
+    assert ids == ["0", "1"]
+
+    second = PickleStore()
+    second.load(path)
+    assert [entry.entry_id for entry in second.entries()] == ids

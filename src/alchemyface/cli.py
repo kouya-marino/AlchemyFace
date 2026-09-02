@@ -107,7 +107,8 @@ def resize(
     # Imported here so the command costs nothing until used, and so this module
     # stays importable where Pillow is unavailable.
     from alchemyface.gui.resize_data import (  # noqa: PLC0415
-        clamp_ratio,
+        MAX_RATIO,
+        MIN_RATIO,
         default_output_folder,
         resize_folder,
         resize_one,
@@ -117,9 +118,13 @@ def resize(
         typer.echo("give exactly one of --folder or --image", err=True)
         raise typer.Exit(code=2)
 
-    scale = clamp_ratio(ratio)
-    if scale != ratio:
-        typer.echo(f"ratio clamped to {scale:.2f}")
+    # Refused rather than clamped, matching the Resize tab. Silently turning a
+    # mistyped 50 into 5.0 would rewrite the files at a size nobody asked for,
+    # and a resize cannot be undone.
+    if not MIN_RATIO <= ratio <= MAX_RATIO:
+        typer.echo(f"--ratio must be between {MIN_RATIO} and {MAX_RATIO}, got {ratio:g}", err=True)
+        raise typer.Exit(code=2)
+    scale = ratio
 
     if folder is not None:
         destination = output or default_output_folder(folder)

@@ -31,7 +31,7 @@ WINDOW_GEOMETRY = "1360x860"
 DEFAULT_SCORE_THRESHOLD = 0.9
 """YuNet's own default. Lower surfaces more faces; higher trims false ones."""
 
-MIN_SCORE_THRESHOLD = 0.10
+MIN_SCORE_THRESHOLD = 0.05
 MAX_SCORE_THRESHOLD = 0.99
 
 
@@ -56,8 +56,15 @@ class App(tk.Tk):
         self._score_threshold_var = tk.DoubleVar(value=DEFAULT_SCORE_THRESHOLD)
 
         self._folder_var = tk.StringVar(value="")
-        self._output_var = tk.StringVar(value="")
+        # Pre-filled so Save works without a detour through the dialog; Open
+        # re-points it at the input folder until the user picks a path himself.
+        self._output_var = tk.StringVar(value=str(Path.cwd() / f"face_db_{dt.date.today():%Y%m%d}.pkl"))
         self._output_chosen = False
+        # Empty means "resolve the weights the usual way" — cache, then
+        # ALCHEMYFACE_MODEL_DIR, then download. A path here overrides that, so a
+        # different YuNet or SFace build can be tried without reinstalling.
+        self._detector_path_var = tk.StringVar(value="")
+        self._embedder_path_var = tk.StringVar(value="")
         """Once the user picks an output explicitly, opening a folder stops
         overwriting their choice."""
 
@@ -164,9 +171,11 @@ class App(tk.Tk):
             from alchemyface.embedding import SFaceEmbedder
             from alchemyface.pipeline import Recognizer
 
+            detector_path = self._detector_path_var.get().strip() or None
+            embedder_path = self._embedder_path_var.get().strip() or None
             self._recognizer = Recognizer(
-                detector=YuNetDetector(score_threshold=self.score_threshold),
-                embedder=SFaceEmbedder(normalize=False),
+                detector=YuNetDetector(model_path=detector_path, score_threshold=self.score_threshold),
+                embedder=SFaceEmbedder(model_path=embedder_path, normalize=False),
                 store=PickleStore(),
             )
             self.set_status("Models loaded.")
@@ -214,23 +223,71 @@ class App(tk.Tk):
         self.resize_view = ResizeView(resize_tab, on_status=self.set_status, reporter=self.reporter)
         self.resize_view.pack(fill=tk.BOTH, expand=True)
 
-        self.inspect_view = InspectView(inspect_tab, on_status=self.set_status, reporter=self.reporter)
+        self.inspect_view = InspectView(
+            inspect_tab,
+            on_status=self.set_status,
+            reporter=self.reporter,
+            suggested_dir=self._output_folder,
+        )
         self.inspect_view.pack(fill=tk.BOTH, expand=True)
 
     def _build_build_tab(self, parent: ttk.Frame) -> None:
         config = ttk.LabelFrame(parent, text="Configuration", padding=8)
         config.pack(side=tk.TOP, fill=tk.X, padx=4, pady=(4, 2))
 
-        ttk.Label(config, text="Input folder:").grid(row=0, column=0, sticky="w", padx=6, pady=3)
-        ttk.Entry(config, textvariable=self._folder_var, width=70).grid(row=0, column=1, sticky="ew", padx=6, pady=3)
+        ttk.Label(config, text="YuNet detector:").grid(row=0, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(config, textvariable=self._detector_path_var, width=70).grid(
+            row=0, column=1, sticky="ew", padx=6, pady=3
+        )
+        ttk.Button(config, text="Browse…", command=self._pick_detector_model).grid(
+            row=0, column=2, sticky="w", padx=6, pady=3
+        )
+
+        ttk.Label(config, text="Face recognizer:").grid(row=1, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(config, textvariable=self._embedder_path_var, width=70).grid(
+            row=1, column=1, sticky="ew", padx=6, pady=3
+        )
+        ttk.Button(config, text="Browse…", command=self._pick_embedder_model).grid(
+            row=1, column=2, sticky="w", padx=6, pady=3
+        )
+
+        ttk.Label(config, text="Input folder:").grid(row=2, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(config, textvariable=self._folder_var, width=70).grid(row=2, column=1, sticky="ew", padx=6, pady=3)
         buttons = ttk.Frame(config)
-        buttons.grid(row=0, column=2, sticky="w")
+        buttons.grid(row=2, column=2, sticky="w")
         ttk.Button(buttons, text="Browse…", command=self._pick_folder).pack(side=tk.LEFT, padx=2)
         ttk.Button(buttons, text="Open", command=self._open_folder).pack(side=tk.LEFT, padx=2)
 
-        ttk.Label(config, text="Output .pkl:").grid(row=1, column=0, sticky="w", padx=6, pady=3)
-        ttk.Entry(config, textvariable=self._output_var, width=70).grid(row=1, column=1, sticky="ew", padx=6, pady=3)
-        ttk.Button(config, text="Save as…", command=self._pick_output).grid(row=1, column=2, sticky="w", padx=6, pady=3)
+        ttk.Label(config, text="Output .pkl:").grid(row=3, column=0, sticky="w", padx=6, pady=3)
+        ttk.Entry(config, textvariable=self._output_var, width=70).grid(row=3, column=1, sticky="ew", padx=6, pady=3)
+        ttk.Button(config, text="Save as…", command=self._pick_output).grid(row=3, column=2, sticky="w", padx=6, pady=3)
+
+        ttk.Label(config, text="Detection score:").grid(row=4, column=0, sticky="w", padx=6, pady=3)
+        score_row = ttk.Frame(config)
+        score_row.grid(row=4, column=1, sticky="w", padx=6, pady=3)
+        # from_ is the recommended floor, not the hard one: the arrows stop at
+        # 0.10, but a value typed straight in is honoured down to MIN.
+        self._score_spinbox = ttk.Spinbox(
+            score_row,
+            from_=0.10,
+            to=MAX_SCORE_THRESHOLD,
+            increment=0.05,
+            textvariable=self._score_threshold_var,
+            width=6,
+            format="%.2f",
+            command=self.apply_score_threshold,
+        )
+        self._score_spinbox.pack(side=tk.LEFT)
+        ttk.Label(
+            score_row,
+            text="  (lower = more faces detected; higher = stricter)",
+            foreground="#666666",
+        ).pack(side=tk.LEFT, padx=4)
+        # Committed on Return and on leaving the field, so a typed value takes
+        # effect without also having to touch an arrow.
+        self._score_spinbox.bind("<Return>", lambda _e: self.apply_score_threshold())
+        self._score_spinbox.bind("<FocusOut>", lambda _e: self.apply_score_threshold())
+
         config.columnconfigure(1, weight=1)
 
         groups = ttk.LabelFrame(parent, text="Group presets", padding=4)
@@ -263,16 +320,46 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------- callbacks
 
+    def _output_folder(self) -> str | None:
+        """The folder the Build tab writes to, for other tabs' file dialogs."""
+        raw = self._output_var.get().strip()
+        return str(Path(raw).parent) if raw else None
+
+    def _pick_detector_model(self) -> None:
+        chosen = filedialog.askopenfilename(
+            title="Select the YuNet detector (.onnx)",
+            filetypes=[("ONNX model", "*.onnx"), ("All files", "*.*")],
+        )
+        if chosen:
+            self._detector_path_var.set(chosen)
+            self.set_recognizer(None)
+            self.set_status("Detector model changed — it loads on the next detection.")
+
+    def _pick_embedder_model(self) -> None:
+        chosen = filedialog.askopenfilename(
+            title="Select the SFace recognizer (.onnx)",
+            filetypes=[("ONNX model", "*.onnx"), ("All files", "*.*")],
+        )
+        if chosen:
+            self._embedder_path_var.set(chosen)
+            self.set_recognizer(None)
+            self.set_status("Recognizer model changed — it loads on the next detection.")
+
     def _pick_folder(self) -> None:
         chosen = filedialog.askdirectory(title="Select a folder of face images")
         if chosen:
             self._folder_var.set(chosen)
 
     def _pick_output(self) -> None:
+        # Opened where the Output box already points, so the dialog continues
+        # from the current choice instead of wherever the OS was left last.
+        current = Path(self._output_var.get().strip() or ".")
         chosen = filedialog.asksaveasfilename(
             title="Save face database",
             defaultextension=".pkl",
             filetypes=[("Pickle", "*.pkl"), ("All files", "*.*")],
+            initialdir=str(current.parent),
+            initialfile=current.name,
         )
         if chosen:
             self._output_var.set(chosen)

@@ -185,9 +185,16 @@ class PickleStore:
         ``{name: vector}`` dict. Anything else raises
         :class:`PickleSchemaError` with a reason.
         """
+        data = self._unpickle(path)
+        self._entries = self._parse(data)
+        if self._entries:
+            self._dim = int(self._entries[0].vector.size)
+
+    @staticmethod
+    def _unpickle(path: Path | str) -> object:
         try:
             with open(path, "rb") as handle:
-                data = pickle.load(handle)
+                return pickle.load(handle)
         except (OSError, PermissionError) as exc:
             raise PickleSchemaError(f"{path}: cannot be read: {exc}") from exc
         except Exception as exc:  # noqa: BLE001
@@ -198,9 +205,67 @@ class PickleStore:
             # OSError is caught above so it keeps its own clearer message.
             raise PickleSchemaError(f"{path}: not a readable pickle: {exc}") from exc
 
-        self._entries = self._parse(data)
-        if self._entries:
-            self._dim = int(self._entries[0].vector.size)
+    def load_leniently(self, path: Path | str) -> list[str]:
+        """Read a database for inspection, keeping entries a strict load rejects.
+
+        Returns a list of complaints, one per salvaged entry, and leaves the
+        gallery holding everything it could parse — including vectors carrying
+        NaN, infinity, or a dimension that disagrees with the rest.
+
+        Refusing those outright was backwards for the two tools that use this.
+        A database is opened in the inspector *because* something is wrong with
+        it, and in the editor to delete the offending rows; aborting the load
+        meant a file with one bad vector could be neither diagnosed nor
+        repaired. :meth:`load` stays strict, so nothing enrols against a vector
+        that cannot be matched.
+        """
+        data = self._unpickle(path)
+        entries, problems = self._parse_leniently(data)
+        self._entries = entries
+        if entries:
+            self._dim = int(entries[0].vector.size)
+        return problems
+
+    def _parse_leniently(self, data: object) -> tuple[list[_Entry], list[str]]:
+        if isinstance(data, dict):
+            items: list[tuple[object, object, object, object]] = [
+                (index, name, "", vector) for index, (name, vector) in enumerate(data.items())
+            ]
+        elif isinstance(data, list):
+            items = []
+            problems: list[str] = []
+            for index, item in enumerate(data):
+                if isinstance(item, tuple) and len(item) == 4:
+                    items.append(item)
+                else:
+                    problems.append(f"entry {index}: not a 4-tuple, skipped")
+        else:
+            raise PickleSchemaError(
+                f"expected a list of (id, name, group, vector) tuples or a "
+                f"{{name: vector}} dict, got {type(data).__name__}"
+            )
+
+        problems = problems if isinstance(data, list) else []
+        entries: list[_Entry] = []
+        for index, (entry_id, name, group, vector) in enumerate(items):
+            try:
+                flat = np.asarray(vector, dtype=np.float32).ravel()
+            except (TypeError, ValueError) as exc:
+                problems.append(f"entry {index} ({name!r}): not a numeric vector, skipped: {exc}")
+                continue
+            if flat.size == 0:
+                problems.append(f"entry {index} ({name!r}): vector is empty, skipped")
+                continue
+            if not np.isfinite(flat).all():
+                problems.append(f"entry {index} ({name!r}): vector contains NaN or infinity")
+            entries.append(_Entry(str(entry_id), str(name), str(group), flat))
+
+        if entries:
+            first = entries[0].vector.size
+            for index, entry in enumerate(entries):
+                if entry.vector.size != first:
+                    problems.append(f"entry {index} ({entry.label!r}): dimension {entry.vector.size}, expected {first}")
+        return entries, problems
 
     def _parse(self, data: object) -> list[_Entry]:
         if isinstance(data, dict):
@@ -217,7 +282,10 @@ class PickleStore:
         for index, (name, vector) in enumerate(data.items()):
             vec = _coerce_vector(vector, dim, f"entry {index} ({name!r})")
             dim = int(vec.size)
-            entries.append(_Entry(uuid4().hex, str(name), "", vec))
+            # The index, not a fresh uuid: the dict form carries no ids, and a
+            # random one differed on every load, so the ID column could not be
+            # used to refer to a row or to compare two views of the same file.
+            entries.append(_Entry(str(index), str(name), "", vec))
         return entries
 
     def _parse_list(self, data: list[object]) -> list[_Entry]:

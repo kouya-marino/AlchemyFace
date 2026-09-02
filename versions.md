@@ -110,8 +110,14 @@ entries with raw magnitudes 9.81–14.59 intact. 313 tests.
 A fan-out audit checked every documented claim against the code, adversarially
 verifying each discrepancy. 25 confirmed; several were defects, not prose.
 
-- **Detection-score spinbox** (0.10–0.99, default 0.9), applied to the live
-  detector. It had been ticked as done since 0.4.0 while no such control existed.
+- `App.apply_score_threshold()` and `YuNetDetector.set_score_threshold()`,
+  applied to the live detector so cached embeddings survive.
+
+  > **Correction (1.0.0).** This bullet originally said a **Detection-score
+  > spinbox** shipped here. It did not — the methods were written, but no widget
+  > ever called them, so the threshold stayed pinned at 0.9. The box had already
+  > been ticked in 0.4.0 with nothing behind it; 0.6.0 was meant to be the fix
+  > and repeated the mistake one layer down. The 1.0.0 parity audit caught it.
 - Face-card Tk variables no longer leak — 480 over 80 re-renders, now 0. The
   release mechanism existed; the line registering variables with it never did.
 - Closing now asks before discarding Build-tab annotations.
@@ -137,7 +143,28 @@ Every tab of the original application, on top of the published library.
 **Verified:** the tab's own justification, measured rather than inherited — a
 constructed selfie at 426x546 with the face filling ~93% of the frame detects 0
 faces, and 1 after resizing to 0.5. Detection is not monotonic in the ratio, so
-the test searches several. 377 tests; 279 run without a display.
+the test searches several.
+
+**Parity audit.** A fan-out audit compared the port tab-by-tab against the
+original, each gap adversarially verified through three lenses. 33 candidates,
+30 confirmed, all fixed here. The headline finding was that the **Detection
+score spinbox never existed** — the method behind it was written and correct,
+but no widget called it, and four documents described the control anyway. The
+0.6.0 entry above is corrected. Also fixed: Save with an empty table silently
+destroyed the loaded database; Resize with an empty source folder crashed;
+an out-of-range ratio was silently clamped and the run proceeded; unticked
+candidates were discarded; one unnamed candidate blocked a whole batch; opening
+an empty folder wiped loaded annotations; and both Inspect and Edit refused to
+open the malformed databases they exist to diagnose and repair. The full list is
+in `CHANGELOG.md`.
+
+**The lesson, taken twice now.** 0.4.0 ticked a box for a control that did not
+exist. 0.6.0 was meant to remedy that and instead implemented the *method* and
+documented the *feature*, leaving the same hole one layer down. What catches
+this is not more careful prose but tests that assert the artefact a user touches
+— so the new tests query the widget tree and invoke the widget's own Tcl
+callback, and every fix in this release was confirmed to fail with itself
+reverted. 413 tests; 287 run without a display.
 
 ---
 
@@ -153,3 +180,7 @@ the test searches several. 377 tests; 279 run without a display.
 | Bad schema | returns `None` | raises `PickleSchemaError` with a reason |
 | Layout | flat, `gui/` beside `main.py` | `src/alchemyface/gui/` |
 | Tooling | requirements.txt, pytest | setuptools, ruff, mypy, CI, PyPI |
+| Resize progress | full `update()` per file | `update_idletasks()` — `update()` re-enters the Tk event loop and segfaults the GUI suite on macOS Tk |
+| Names | written verbatim | trimmed of surrounding whitespace, which is invisible in the table but makes a second identity |
+| Detection score floor | clamped in the GUI only | clamped in `YuNetDetector`, so the library and CLI get it too |
+| Malformed `.pkl` | displayed | displayed, with each problem reported; still refused for enrolment |

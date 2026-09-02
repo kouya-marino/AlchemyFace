@@ -20,8 +20,9 @@ from alchemyface.gui.resize_data import (
     MIN_RATIO,
     clamp_ratio,
     default_output_folder,
-    resize_folder,
+    plan_folder,
     resize_one,
+    resize_one_outcome,
 )
 
 
@@ -63,48 +64,79 @@ class ResizeView(ttk.Frame):
 
     def resize_folder_now(self, source: Path | str | None = None, destination: Path | str | None = None) -> int:
         """Resize a whole folder. Returns how many files were written."""
-        src = Path(str(source) if source is not None else self._folder_in.get().strip())
-        if not str(src) or not src.is_dir():
+        raw_src = str(source) if source is not None else self._folder_in.get().strip()
+        # Checked as text, before Path() sees it: Path("") is PosixPath("."),
+        # which passes is_dir() and then failed deep inside with an empty name.
+        if not raw_src:
+            return self._failed("Set a source folder.") and 0
+        src = Path(raw_src)
+        if not src.is_dir():
             return self._failed(f"Not a folder: {src}") and 0
+        ratio = self._checked_ratio()
+        if ratio is None:
+            return 0
         raw_out = str(destination) if destination is not None else self._folder_out.get().strip()
         dst = Path(raw_out) if raw_out else default_output_folder(src)
         self._folder_in.set(str(src))
         self._folder_out.set(str(dst))
 
         try:
-            outcomes = resize_folder(src, dst, self.ratio)
+            plan = plan_folder(src, dst, ratio)
         except (ValueError, NotADirectoryError) as exc:
             return self._failed(str(exc)) and 0
-        if not outcomes:
+        if not plan:
             self._failed(f"No images found in {src}")
             return 0
 
-        for outcome in outcomes:
+        self._begin_run(f"Resizing {len(plan)} image(s) at ratio {ratio:.2f}", src, dst)
+        written = 0
+        failed = 0
+        # Resized one at a time rather than in a single call so each line is
+        # visible as it happens. A folder of a few hundred photos took long
+        # enough that a log filled in at the end looked like a hung window.
+        for source_path, destination_path in plan:
+            outcome = resize_one_outcome(source_path, destination_path, ratio)
             self._append(str(outcome))
-        written = sum(1 for o in outcomes if o.ok)
-        failed = len(outcomes) - written
+            written += 1 if outcome.ok else 0
+            failed += 0 if outcome.ok else 1
+            self._pump()
+        self._append("")
         self._append(f"Done. {written} resized, {failed} failed.")
-        self._set_status(f"Resized {written} of {len(outcomes)} image(s) at {self.ratio:.2f} → {dst}")
+        self._set_status(f"Resized {written} of {len(plan)} image(s) at {ratio:.2f} → {dst}")
         return written
 
     def resize_image_now(self, source: Path | str | None = None, destination: Path | str | None = None) -> bool:
         """Resize a single image. Returns whether it worked."""
-        src = Path(str(source) if source is not None else self._image_in.get().strip())
-        if not str(src) or not src.is_file():
+        raw_src = str(source) if source is not None else self._image_in.get().strip()
+        if not raw_src:
+            return self._failed("Set a source image.")
+        src = Path(raw_src)
+        if not src.is_file():
             return self._failed(f"Not a file: {src}")
+        if src.suffix.lower() not in IMAGE_EXTENSIONS:
+            # Refused up front rather than handed to Pillow, which would happily
+            # write a .tif the Build tab then ignores when it scans the folder.
+            expected = ", ".join(sorted(IMAGE_EXTENSIONS))
+            return self._failed(f"Unsupported file extension: {src.suffix}. Expected one of {expected}.")
+        ratio = self._checked_ratio()
+        if ratio is None:
+            return False
         raw_out = str(destination) if destination is not None else self._image_out.get().strip()
         dst = Path(raw_out) if raw_out else src.with_name(f"{src.stem}_resized{src.suffix}")
         self._image_in.set(str(src))
         self._image_out.set(str(dst))
 
+        self._begin_run(f"Resizing 1 image at ratio {ratio:.2f}", src, dst)
         try:
-            result = resize_one(src, dst, self.ratio)
+            result = resize_one(src, dst, ratio)
         except ValueError as exc:
             return self._failed(str(exc))
         except OSError as exc:
             return self._failed(f"{src.name}: {exc}")
         self._append(f"{src.name}: {result}")
-        self._set_status(f"Resized {src.name} at {self.ratio:.2f} → {dst}")
+        self._append("")
+        self._append("Done. 1 resized, 0 failed.")
+        self._set_status(f"Resized {src.name} at {ratio:.2f} → {dst}")
         return True
 
     def shutdown(self) -> None:
@@ -117,6 +149,51 @@ class ResizeView(ttk.Frame):
             return float(self._ratio_var.get())
         except (tk.TclError, ValueError):
             return DEFAULT_RATIO
+
+    def _checked_ratio(self) -> float | None:
+        """The ratio to use, or ``None`` having already reported why not.
+
+        Silently clamping an out-of-range ratio meant a typo — 50 for 0.5 —
+        rewrote a folder of photos at a size the user never asked for, with
+        nothing on screen to say so. A resize cannot be undone, so it asks.
+        """
+        try:
+            raw = float(self._ratio_var.get())
+        except (tk.TclError, ValueError):
+            self._failed("Ratio must be a number.")
+            return None
+        if raw != raw or not MIN_RATIO <= raw <= MAX_RATIO:
+            self._failed(f"Ratio must be between {MIN_RATIO} and {MAX_RATIO}. Got {raw:g}.")
+            return None
+        return raw
+
+    def _begin_run(self, header: str, source: Path, destination: Path) -> None:
+        """Clear the log and write the run header, as the original did.
+
+        Without the clear, a second run appended under the first and it was not
+        obvious which lines belonged to which.
+        """
+        self.clear_log()
+        self._append(header)
+        self._append(f"  src: {source}")
+        self._append(f"  dst: {destination}")
+        self._append("")
+
+    def _pump(self) -> None:
+        """Redraw the log so each line appears as the file is written.
+
+        `update_idletasks()`, deliberately, though the original called the full
+        `update()` here. `update()` re-enters the Tk event loop, and on the
+        macOS Tk this is developed against that reliably segfaults the GUI
+        suite — the same crash a full `update()` caused in the detection view,
+        for the same reason. Idle tasks alone still flush the redraw, so
+        progress is visible; what is given up is handling clicks mid-run, so a
+        long batch cannot be closed until it finishes.
+        """
+        try:
+            self.update_idletasks()
+        except tk.TclError:
+            pass  # the window went away mid-run
 
     def _failed(self, reason: str) -> bool:
         self._append(f"ERROR: {reason}")
@@ -210,7 +287,10 @@ class ResizeView(ttk.Frame):
             self._folder_out_chosen = True
 
     def _pick_image_in(self) -> None:
+        # Both cases: a camera that writes .JPG is common enough that filtering
+        # on the lowercase set alone hid the file the user came to pick.
         patterns = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTENSIONS))
+        patterns += " " + " ".join(f"*{ext.upper()}" for ext in sorted(IMAGE_EXTENSIONS))
         chosen = filedialog.askopenfilename(
             title="Select an image", filetypes=[("Images", patterns), ("All files", "*.*")]
         )
@@ -222,7 +302,16 @@ class ResizeView(ttk.Frame):
             self._image_out.set(str(path.with_name(f"{path.stem}_resized{path.suffix}")))
 
     def _pick_image_out(self) -> None:
-        chosen = filedialog.asksaveasfilename(title="Save resized image as")
+        current = self._image_out.get().strip() or self._image_in.get().strip()
+        suggested = Path(current) if current else Path.cwd() / "resized.jpg"
+        patterns = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTENSIONS))
+        chosen = filedialog.asksaveasfilename(
+            title="Save resized image as",
+            defaultextension=suggested.suffix or ".jpg",
+            filetypes=[("Images", patterns), ("All files", "*.*")],
+            initialdir=str(suggested.parent),
+            initialfile=suggested.name,
+        )
         if chosen:
             self._image_out.set(chosen)
             self._image_out_chosen = True

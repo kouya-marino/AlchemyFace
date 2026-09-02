@@ -42,10 +42,92 @@ particular test photo could not be detected. That was false — detection had
 merely failed — and the claim was corrected in 0.5.0. The justification is now
 reproducible rather than asserted.
 
+### Fixed — from a tab-by-tab parity audit
+
+A second fan-out audit compared every tab against the original and
+adversarially verified each gap through three lenses. 33 candidates, 30
+confirmed. All of them are fixed here.
+
+**The Detection score spinbox never existed.** 0.6.0's notes, this changelog,
+`versions.md` and the README all described a spinbox in the Build tab.
+`App.apply_score_threshold()` was written and correct, but no widget ever called
+it, so the threshold was pinned at 0.9 and every document described a control
+that was not there. See the corrected 0.6.0 entry below. The widget now exists,
+and four tests assert the widget itself rather than the method behind it —
+including one that invokes its Tcl `command` callback, because `event_generate`
+is not delivered to a withdrawn window and would have passed against a spinbox
+wired to nothing.
+
+Data loss and crashes:
+
+- **Save with an empty table overwrote the loaded database with an empty one.**
+  A select-all-delete followed by Save destroyed every entry, with no undo.
+  Refused now, at the session layer so the CLI is covered too.
+- **Resize folder with an empty Source field raised an uncaught `ValueError`**
+  out of the button callback: `Path("")` is `PosixPath(".")`, which passes
+  `is_dir()`. Refused with a message.
+- **An out-of-range resize ratio was silently clamped** and the run proceeded,
+  so a mistyped 50 for 0.5 rewrote a folder at a size nobody asked for. Both the
+  tab and `alchemyface resize` now refuse and say why.
+
+Work being thrown away:
+
+- Candidates left unticked were discarded by **Add checked** instead of staying
+  pending for a second pass.
+- One unnamed ticked candidate made **Add checked** add *nothing*; it now adds
+  the usable ones and reports what it skipped.
+- Opening a folder with no images **wiped the annotations already loaded**; it
+  now keeps them and says so.
+
+Refusing to open repairable databases:
+
+- Inspect DB and Edit DB aborted the whole load on any NaN, infinity, or
+  odd-sized vector. That is backwards: a database is opened in the inspector
+  *because* something is wrong with it, and in the editor to delete the
+  offending rows. `PickleStore.load_leniently()` now salvages what it can and
+  reports each problem; `load()` stays strict, so nothing enrols against a
+  vector that cannot be matched.
+
+Missing controls and feedback:
+
+- The Build tab could not choose the YuNet / SFace `.onnx` files.
+- Pending cards were never redrawn after **Add checked** or a load, so consumed
+  candidates stayed on screen and pressing the button again did nothing
+  silently.
+- Save with no database loaded reported an error instead of opening **Save as…**.
+- Detecting an image or folder that yielded no faces said nothing at all.
+- The Resize log had no run header, was never cleared between runs, and
+  single-image mode printed no summary. It now logs each file as it is written.
+- The Edit tab lost its summary line, and its Folder/Image path boxes, so a path
+  could not be typed or pasted and Process could not be re-run.
+- Escape did not cancel an inline Group edit, and opening the preset dropdown
+  committed the half-typed value.
+- The face-box number lost its filled colour chip and was unreadable on a light
+  photo.
+- The status bar never reported the current image's detection result.
+- A `{name: vector}` database showed a fresh random hex ID on every load instead
+  of the entry's index.
+- Save as… / Browse… dialogs did not open where the relevant box already
+  pointed, and the Resize image filter missed uppercase extensions.
+
 ### Notes
 
 - Four tabs, matching the original: Build DB, Edit DB, Resize, Inspect DB.
-- 377 tests; 279 run without a display.
+- `YuNetDetector` now clamps its own score to 0.05–0.99. It previously accepted
+  1.5 and -3.0 unchanged, which cv2 takes without complaint and then returns
+  garbage for.
+- 413 tests; 287 run without a display.
+
+### Deliberate differences from the original
+
+- The Resize log redraws with `update_idletasks()`, where the original called
+  the full `update()`. `update()` re-enters the Tk event loop and reliably
+  segfaults the GUI suite on the macOS Tk this is developed against — the same
+  crash, for the same reason, that a full `update()` caused in the detection
+  view. Progress is still visible; a long batch cannot be closed mid-run.
+- Names are written trimmed of surrounding whitespace; the original wrote them
+  verbatim. A trailing space is invisible in the table and produces a second,
+  silently distinct identity.
 
 ## [0.6.0] — 2026-09-02
 
@@ -55,14 +137,21 @@ discrepancies, several of them real defects rather than prose. Resize moves to
 
 ### Added
 
-- **Detection-score control** in the Build tab — a spinbox, 0.10–0.99, default
-  0.9, applied to the live detector rather than by rebuilding it, so cached
-  embeddings survive. `YuNetDetector.set_score_threshold()` and
-  `App.apply_score_threshold()` support it.
+- `YuNetDetector.set_score_threshold()` and `App.apply_score_threshold()`, to
+  change the detection score without rebuilding the recognizer so cached
+  embeddings survive.
 
-  This was **ticked as done in `todo.md` since 0.4.0 while no such control
-  existed**, and the bullet describing it was deleted from `versions.md` in the
-  same commit that ticked the box. Implementing it was the honest remedy.
+  > **Correction (1.0.0).** This entry originally claimed a **Detection-score
+  > spinbox** shipped in the Build tab. It did not. The two methods above were
+  > written and are correct, but no widget was ever added to call them, so the
+  > threshold stayed pinned at 0.9 and this changelog, `versions.md`, `todo.md`
+  > and the README all documented a control that did not exist.
+  >
+  > The same box had already been ticked in `todo.md` in 0.4.0 with nothing
+  > behind it; 0.6.0 was supposed to be the remedy and instead repeated the
+  > mistake one layer down — implementing the method and documenting the
+  > feature. The 1.0.0 parity audit caught it. The widget now exists and is
+  > tested as a widget.
 - `tests/unit/test_declared_dependencies.py` — asserts `requirements*.txt`
   matches `pyproject.toml` and the README badge matches the declared version.
   Comments claiming files are "kept in step" are not mechanisms.

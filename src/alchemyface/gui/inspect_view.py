@@ -53,9 +53,14 @@ class InspectView(ttk.Frame):
         *,
         on_status: Callable[[str], None],
         reporter: Reporter | None = None,
+        suggested_dir: Callable[[], str | None] | None = None,
     ) -> None:
         super().__init__(parent)
         self._set_status = on_status
+        # Where Browse… starts when nothing is loaded yet. The window supplies
+        # the Build tab's output folder, so the database just built is right
+        # there rather than wherever the OS last happened to be.
+        self._suggested_dir = suggested_dir
         self._reporter: Reporter = reporter or DialogReporter()
         self._path_var = tk.StringVar(value="")
         self._summary_var = tk.StringVar(value="No file loaded.")
@@ -92,7 +97,9 @@ class InspectView(ttk.Frame):
         chosen = filedialog.askopenfilename(
             title="Open face database",
             filetypes=[("Pickle", "*.pkl"), ("All files", "*.*")],
-            initialdir=str(Path(self._path_var.get()).parent) if self._path_var.get() else str(Path.cwd()),
+            # Falls back to the Build tab's output folder, which is where the
+            # database the user most likely wants to inspect was just written.
+            initialdir=self._initial_dir(),
         )
         if chosen:
             self._path_var.set(chosen)
@@ -114,13 +121,32 @@ class InspectView(ttk.Frame):
 
         store = PickleStore()
         try:
-            store.load(target)
+            # Lenient on purpose: a database is opened here *because* something
+            # is suspected wrong with it, so refusing to show one that holds a
+            # NaN or an odd-sized vector withheld exactly the diagnosis the
+            # tool exists to give. The complaints are reported instead.
+            problems = store.load_leniently(target)
         except AlchemyFaceError as exc:
             return self._failed(str(exc))
 
         self._store = store
         self._render(target)
+        if problems:
+            self._set_status(f"Loaded with {len(problems)} problem(s) — see the report.")
+            self._reporter.info(
+                "Loaded with problems",
+                f"{target.name} loaded, but {len(problems)} entr"
+                f"{'y is' if len(problems) == 1 else 'ies are'} malformed:\n"
+                + "\n".join(f"  • {problem}" for problem in problems),
+            )
         return True
+
+    def _initial_dir(self) -> str:
+        current = self._path_var.get().strip()
+        if current:
+            return str(Path(current).parent)
+        suggested = self._suggested_dir() if self._suggested_dir is not None else None
+        return suggested or str(Path.cwd())
 
     def _failed(self, reason: str) -> bool:
         self._store = None

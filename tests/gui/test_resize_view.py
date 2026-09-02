@@ -139,3 +139,89 @@ def test_the_log_can_be_cleared(resize, tmp_path: Path) -> None:  # type: ignore
 def test_the_status_bar_is_updated(resize, app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     resize.resize_image_now(an_image(tmp_path / "a.png"), tmp_path / "b.png")
     assert "Resized" in app.status
+
+
+# ------------------------------------------------------- refusing bad input
+#
+# A resize cannot be undone, so the tab asks rather than guesses. Silently
+# clamping meant a typo — 50 for 0.5 — rewrote a folder at a size nobody asked
+# for, with nothing on screen to say it had happened.
+
+
+def test_an_empty_source_folder_is_refused_not_crashed(resize) -> None:  # type: ignore[no-untyped-def]
+    """Path("") is PosixPath("."), which passed the is_dir() guard and then
+    failed deep inside with an uncaught ValueError."""
+    resize._folder_in.set("")
+    assert resize.resize_folder_now() == 0
+    assert any("source folder" in message.lower() for _title, message in resize.reporter.errors)
+
+
+def test_an_empty_source_image_is_refused(resize) -> None:  # type: ignore[no-untyped-def]
+    resize._image_in.set("")
+    assert resize.resize_image_now() is False
+    assert any("source image" in message.lower() for _title, message in resize.reporter.errors)
+
+
+@pytest.mark.parametrize("bad", [50.0, 0.0, -1.0, 5.5])
+def test_an_out_of_range_ratio_is_refused_rather_than_clamped(resize, tmp_path: Path, bad: float) -> None:  # type: ignore[no-untyped-def]
+    folder = tmp_path / "in"
+    folder.mkdir()
+    an_image(folder / "one.jpg")
+    resize._ratio_var.set(bad)
+    assert resize.resize_folder_now(folder, tmp_path / "out") == 0
+    assert any("between" in message for _title, message in resize.reporter.errors)
+    assert not (tmp_path / "out").exists()
+
+
+def test_a_non_numeric_ratio_is_refused(resize, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    folder = tmp_path / "in"
+    folder.mkdir()
+    an_image(folder / "one.jpg")
+    resize._ratio_var.set(float("nan"))
+    assert resize.resize_folder_now(folder, tmp_path / "out") == 0
+    assert resize.reporter.errors
+
+
+def test_an_unsupported_extension_is_refused_before_pillow_sees_it(resize, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """A .tif would resize fine and then be ignored by the Build tab's scan."""
+    from PIL import Image
+
+    odd = tmp_path / "photo.tif"
+    Image.new("RGB", (40, 30)).save(odd)
+    assert resize.resize_image_now(odd) is False
+    assert any("Unsupported file extension" in message for _title, message in resize.reporter.errors)
+    assert not (tmp_path / "photo_resized.tif").exists()
+
+
+# --------------------------------------------------------------- the log
+
+
+def test_the_log_gets_a_header_and_a_summary(resize, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    folder = tmp_path / "in"
+    folder.mkdir()
+    an_image(folder / "one.jpg")
+    an_image(folder / "two.jpg")
+    resize.resize_folder_now(folder, tmp_path / "out")
+    log = resize.log_text()
+    assert "Resizing 2 image(s) at ratio 0.50" in log
+    assert f"  src: {folder}" in log
+    assert "Done. 2 resized, 0 failed." in log
+
+
+def test_the_log_is_cleared_between_runs(resize, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """Appending under the previous run made it unclear which lines were which."""
+    folder = tmp_path / "in"
+    folder.mkdir()
+    an_image(folder / "one.jpg")
+    resize.resize_folder_now(folder, tmp_path / "out1")
+    resize.resize_folder_now(folder, tmp_path / "out2")
+    assert resize.log_text().count("Resizing 1 image(s)") == 1
+    assert "out1" not in resize.log_text()
+
+
+def test_single_image_mode_logs_a_summary_too(resize, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    source = an_image(tmp_path / "one.jpg")
+    assert resize.resize_image_now(source) is True
+    log = resize.log_text()
+    assert "Resizing 1 image at ratio 0.50" in log
+    assert "Done. 1 resized, 0 failed." in log

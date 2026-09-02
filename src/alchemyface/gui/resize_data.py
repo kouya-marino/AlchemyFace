@@ -141,16 +141,22 @@ def plan_folder(source: Path | str, destination: Path | str, ratio: float) -> li
     ]
 
 
+def resize_one_outcome(source: Path, destination: Path, ratio: float) -> ResizeOutcome:
+    """One file's resize, with any failure captured rather than raised.
+
+    Separate from :func:`resize_folder` so a caller can drive the loop itself
+    and report each file as it lands — the GUI logs progress this way.
+    """
+    try:
+        return ResizeOutcome(source, destination, result=resize_one(source, destination, ratio))
+    except Exception as exc:  # noqa: BLE001 - a failure is one line of the log
+        return ResizeOutcome(source, destination, error=f"{type(exc).__name__}: {exc}")
+
+
 def resize_folder(source: Path | str, destination: Path | str, ratio: float) -> list[ResizeOutcome]:
     """Resize every image in a folder, reporting each file separately.
 
     One unreadable file must not abandon the rest of the batch, so failures are
     collected rather than raised.
     """
-    outcomes: list[ResizeOutcome] = []
-    for src, dst in plan_folder(source, destination, ratio):
-        try:
-            outcomes.append(ResizeOutcome(src, dst, result=resize_one(src, dst, ratio)))
-        except Exception as exc:  # noqa: BLE001 - a failure is one line of the log
-            outcomes.append(ResizeOutcome(src, dst, error=f"{type(exc).__name__}: {exc}"))
-    return outcomes
+    return [resize_one_outcome(src, dst, ratio) for src, dst in plan_folder(source, destination, ratio)]

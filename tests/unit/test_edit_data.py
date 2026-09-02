@@ -178,44 +178,61 @@ def test_adding_pending_faces_does_not_dirty_the_session(session: EditSession) -
 
 def test_merging_appends_only_the_checked_ones(session: EditSession) -> None:
     session.add_pending([pending("yes"), pending("no", include=False)])
-    assert session.merge_checked() == 1
+    assert session.merge_checked().added == 1
     assert [e.name for e in session.entries][-1] == "yes"
     assert session.dirty is True
 
 
-def test_merging_clears_the_pending_list(session: EditSession) -> None:
+def test_merging_keeps_the_unchecked_ones_pending(session: EditSession) -> None:
+    """An unticked candidate is a "not yet", not a "no" — throwing it away meant
+    re-running detection over the whole folder to get it back."""
     session.add_pending([pending("yes"), pending("no", include=False)])
     session.merge_checked()
-    assert session.pending == []
+    assert [face.name for face in session.pending] == ["no"]
 
 
 def test_merging_nothing_checked_changes_nothing(session: EditSession) -> None:
     session.add_pending([pending("no", include=False)])
-    assert session.merge_checked() == 0
+    assert session.merge_checked().added == 0
     assert len(session.entries) == 3
     assert session.dirty is False
 
 
-def test_merging_refuses_a_face_with_no_name(session: EditSession) -> None:
+def test_merging_skips_a_face_with_no_name_and_keeps_it(session: EditSession) -> None:
     session.add_pending([pending("   ")])
-    with pytest.raises(ValueError, match="name"):
-        session.merge_checked()
+    result = session.merge_checked()
+    assert result.added == 0
+    assert "no name" in result.skipped[0]
     assert len(session.entries) == 3
+    # left pending so the name can be filled in and the add retried
+    assert len(session.pending) == 1
 
 
-def test_merging_refuses_a_face_with_no_embedding(session: EditSession) -> None:
+def test_merging_skips_a_face_with_no_embedding(session: EditSession) -> None:
     face = pending("someone")
     face.embedding = None
     session.add_pending([face])
-    with pytest.raises(ValueError, match="embedding"):
-        session.merge_checked()
+    result = session.merge_checked()
+    assert result.added == 0
+    assert "embedding" in result.skipped[0]
+
+
+def test_one_bad_candidate_does_not_block_the_good_ones(session: EditSession) -> None:
+    """The original added the named faces and reported the rest. Refusing the
+    whole batch meant one blank name cost a screenful of re-ticking."""
+    session.add_pending([pending("alice"), pending("  "), pending("bob")])
+    result = session.merge_checked()
+    assert result.added == 2
+    assert [e.name for e in session.entries][-2:] == ["alice", "bob"]
+    assert len(result.skipped) == 1
+    assert [face.name for face in session.pending] == ["  "]
 
 
 def test_duplicate_names_are_allowed(session: EditSession) -> None:
     # The robot's matcher resolves by best cosine similarity, so two entries for
     # one person are useful rather than a mistake.
     session.add_pending([pending("ada")])
-    assert session.merge_checked() == 1
+    assert session.merge_checked().added == 1
     assert [e.name for e in session.entries].count("ada") == 2
 
 
@@ -336,3 +353,17 @@ def test_a_non_128_database_can_be_saved(session: EditSession, tmp_path: Path) -
     check.load(out)
     assert check.dim == 4
     assert len(check) == 3
+
+
+def test_saving_an_empty_table_is_refused(session: EditSession, tmp_path: Path) -> None:
+    """Overwriting a real database with an empty one loses every entry and
+    cannot be undone. A select-all-delete followed by Save is far likelier to
+    be a mistake than an intent."""
+    destination = tmp_path / "db.pkl"
+    session.save(destination)
+    before = destination.read_bytes()
+
+    session.remove(list(range(len(session.entries))))
+    with pytest.raises(ValueError, match="empty"):
+        session.save(destination)
+    assert destination.read_bytes() == before

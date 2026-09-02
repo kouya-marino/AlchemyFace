@@ -243,14 +243,25 @@ def test_resize_needs_exactly_one_source(tmp_path: Path) -> None:
     assert runner.invoke(cli.app, ["resize"]).exit_code == 2
 
 
-def test_resize_clamps_an_absurd_ratio(tmp_path: Path) -> None:
+def test_resize_refuses_an_absurd_ratio(tmp_path: Path) -> None:
     src = make_image(tmp_path / "in.png", 100, 100)
     result = runner.invoke(
         cli.app,
         ["resize", "--image", str(src), "--output", str(tmp_path / "o.png"), "--ratio", "99"],
     )
+    assert result.exit_code == 2, result.output
+    assert "must be between" in result.output
+    assert not (tmp_path / "o.png").exists()
+
+
+def test_resize_accepts_a_ratio_at_the_bounds(tmp_path: Path) -> None:
+    src = make_image(tmp_path / "in.png", 100, 100)
+    result = runner.invoke(
+        cli.app,
+        ["resize", "--image", str(src), "--output", str(tmp_path / "o.png"), "--ratio", "5.0"],
+    )
     assert result.exit_code == 0, result.output
-    assert "clamped to 5.00" in result.output
+    assert (tmp_path / "o.png").exists()
 
 
 def test_resize_reports_an_empty_folder(tmp_path: Path) -> None:

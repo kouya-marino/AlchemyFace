@@ -49,6 +49,18 @@ class PendingFace:
 
 
 @dataclass(frozen=True)
+class MergeResult:
+    """What ``merge_checked`` managed to do.
+
+    ``skipped`` names each candidate that could not be added and why. Those
+    stay pending, so the user can fix them and try again.
+    """
+
+    added: int
+    skipped: list[str]
+
+
+@dataclass(frozen=True)
 class EditRow:
     """One row of the entries table, ready to display."""
 
@@ -68,6 +80,7 @@ class EditSession:
     def __init__(self) -> None:
         self._entries: list[EditableEntry] = []
         self._pending: list[PendingFace] = []
+        self._problems: list[str] = []
         self._path: Path | None = None
         self._dirty = False
 
@@ -113,13 +126,22 @@ class EditSession:
         database and mean nothing against a different one.
         """
         store = PickleStore()
-        store.load(path)
+        # Lenient so a database holding a bad vector can still be opened and
+        # repaired here — deleting the offending row is the whole reason to
+        # bring it into the editor. Saving stays strict, so a row that cannot
+        # be matched against is never written back out.
+        self._problems = store.load_leniently(path)
         self._entries = [
             EditableEntry(name=entry.label, group=entry.group, vector=entry.vector) for entry in store.entries()
         ]
         self._pending = []
         self._path = Path(path)
         self._dirty = False
+
+    @property
+    def problems(self) -> list[str]:
+        """What was wrong with the loaded file, if anything."""
+        return list(self._problems)
 
     # --------------------------------------------------------------- editing
 
@@ -164,33 +186,46 @@ class EditSession:
     def clear_pending(self) -> None:
         self._pending = []
 
-    def merge_checked(self) -> int:
-        """Move every ticked candidate into the entries table.
+    def merge_checked(self) -> MergeResult:
+        """Move every usable ticked candidate into the entries table.
 
-        Raises ``ValueError`` if a ticked candidate lacks a name or an
-        embedding, rather than writing a database that cannot be matched
-        against. Duplicate names are fine: the robot resolves by best cosine
-        similarity, so a second photo of someone is an improvement.
+        A candidate with no name or no embedding cannot be matched against, so
+        it is skipped rather than written — but only *it* is skipped, and the
+        rest of the batch still lands. Refusing the whole batch over one blank
+        name meant re-ticking a screenful of faces to fix a single typo.
+
+        Nothing is discarded: a candidate that was skipped, and one that was
+        never ticked, both stay pending, so they can be named, ticked and added
+        on a second pass. Duplicate names are fine — the robot resolves by best
+        cosine similarity, so a second photo of someone is an improvement.
         """
-        chosen = [face for face in self._pending if face.include]
-        for face in chosen:
+        added: list[EditableEntry] = []
+        skipped: list[str] = []
+        keep: list[PendingFace] = []
+        for face in self._pending:
+            if not face.include:
+                keep.append(face)
+                continue
             if not face.name.strip():
-                raise ValueError(f"{face.source.name}: a face has no name.")
+                skipped.append(f"{face.source.name}: a face has no name")
+                keep.append(face)
+                continue
             if face.embedding is None:
-                raise ValueError(f"{face.source.name}: {face.name} has no embedding.")
-        for face in chosen:
-            assert face.embedding is not None  # checked above
-            self._entries.append(
+                skipped.append(f"{face.source.name}: {face.name} has no embedding")
+                keep.append(face)
+                continue
+            added.append(
                 EditableEntry(
                     name=face.name.strip(),
                     group=face.group.strip(),
                     vector=face.embedding,
                 )
             )
-        self._pending = []
-        if chosen:
+        self._entries.extend(added)
+        self._pending = keep
+        if added:
             self._dirty = True
-        return len(chosen)
+        return MergeResult(added=len(added), skipped=skipped)
 
     # ---------------------------------------------------------------- saving
 
@@ -199,6 +234,11 @@ class EditSession:
         destination = Path(path) if path is not None else self._path
         if destination is None:
             raise ValueError("no path to save to; pass one explicitly")
+        # An empty table is almost always a mistake — a select-all-delete, or a
+        # load that failed — and writing it would replace a real database with
+        # an empty one, losing every entry, with no undo.
+        if not self._entries:
+            raise ValueError("Nothing to save — the entries list is empty.")
         # The store validates every vector against its dimension, so it must be
         # built for what this session actually holds. Defaulting to 128 worked
         # only because every real database happens to be 128.
