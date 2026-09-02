@@ -106,13 +106,25 @@ with VideoSource(0, width=1280, height=720) as camera:
 
 # The application
 
-Three equivalent ways in — use whichever suits where you are:
+From a checkout, with nothing installed:
 
 ```bash
-alchemyface db                      # the installed console script
+python main.py
+```
+
+Or, once the package is installed:
+
+```bash
+alchemyface db                      # the console script
 python -m alchemyface db            # same thing, no reliance on PATH
 python -m alchemyface.gui.app       # straight to the window
 ```
+
+`main.py` puts `src/` on the path itself and then hands off to the `db` command,
+so it cannot drift from `alchemyface db` — same behaviour, same message when
+tkinter is missing, same exit code. It is deliberately **not** packaged: a
+top-level `main` module in the wheel would claim a name that is not ours, and CI
+fails the build if one appears.
 
 A Tkinter desktop app that turns folders of photos into a `.pkl` face database.
 
@@ -300,8 +312,8 @@ pip install -e ".[dev]"
 | `pytest tests/ -m "not models and not camera and not gui"` | the fast suite — no display, no models, no network |
 | `pytest tests/ -m "gui"` | needs a display; `xvfb-run -a` on a headless box |
 | `pytest tests/ -m "not camera"` | everything except the camera |
-| `ruff check src tests` · `ruff format src tests` | lint and format |
-| `mypy src/alchemyface` | type check |
+| `ruff check src tests main.py` · `ruff format src tests main.py` | lint and format |
+| `mypy src/alchemyface main.py` | type check |
 | `python -m build` | wheel and sdist |
 
 There is deliberately no coverage badge. A hand-written percentage goes stale
