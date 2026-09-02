@@ -4,13 +4,14 @@ out so nothing loads a model."""
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
 import pytest
 from typer.testing import CliRunner
 
-from alchemyface import cli
+from alchemyface import __version__, cli
 from alchemyface.models import ModelSpec
 from alchemyface.store import InMemoryStore
 from tests.fakes import FakeDetector, FakeEmbedder, make_face
@@ -277,3 +278,104 @@ def test_resize_refuses_to_overwrite_its_own_source(tmp_path: Path) -> None:
     result = runner.invoke(cli.app, ["resize", "--image", str(src), "--output", str(src)])
     assert result.exit_code == 1
     assert "same file" in result.output
+
+
+# ---------------------------------------------------- download-models --model-dir
+
+
+def test_download_models_writes_into_the_requested_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The flag says "directory to write the weights into". It used to report
+    "already present" and write nothing whenever the cache held a copy."""
+    from alchemyface import models
+
+    payload = b"pretend onnx bytes"
+    source = tmp_path / "source.onnx"
+    source.write_bytes(payload)
+    spec = models.ModelSpec(
+        key="test",
+        filename="canonical.onnx",
+        url=source.as_uri(),
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+    # A populated cache: the old code stopped here and left `wanted` empty.
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "canonical.onnx").write_bytes(payload)
+    monkeypatch.setattr(models, "cache_dir", lambda: cache)
+    monkeypatch.setattr(cli, "MODELS", {"test": spec})
+    monkeypatch.delenv("ALCHEMYFACE_MODEL_DIR", raising=False)
+
+    wanted = tmp_path / "wanted"
+    result = runner.invoke(cli.app, ["download-models", "--model-dir", str(wanted)])
+    assert result.exit_code == 0, result.output
+    assert (wanted / "canonical.onnx").read_bytes() == payload
+
+
+def test_download_models_still_skips_when_the_file_is_already_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Writing where asked must not mean re-downloading every time."""
+    from alchemyface import models
+
+    payload = b"pretend onnx bytes"
+    spec = models.ModelSpec(
+        key="test",
+        filename="canonical.onnx",
+        url="file:///nonexistent-so-a-download-would-fail",
+        sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    wanted = tmp_path / "wanted"
+    wanted.mkdir()
+    (wanted / "canonical.onnx").write_bytes(payload)
+    monkeypatch.setattr(cli, "MODELS", {"test": spec})
+
+    result = runner.invoke(cli.app, ["download-models", "--model-dir", str(wanted)])
+    assert result.exit_code == 0, result.output
+    assert "already present" in result.output
+
+
+# ------------------------------------------------------- python -m alchemyface
+
+
+def test_the_package_is_runnable_with_dash_m() -> None:
+    """`python -m alchemyface` is the first thing a Python programmer tries, and
+    the application this was ported from was started with a plain
+    `python main.py`."""
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, "-m", "alchemyface", "version"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == __version__
+
+
+def test_dash_m_exposes_the_same_commands_as_the_console_script() -> None:
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, "-m", "alchemyface", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stderr
+    for command in ("db", "resize", "enroll", "identify", "download-models"):
+        assert command in done.stdout
+
+
+def test_the_gui_module_is_directly_runnable() -> None:
+    """`python -m alchemyface.gui.app` is the closest equivalent to the
+    original's `python main.py`. Not launched here — that would block on a
+    window — but the entry point must exist."""
+    import alchemyface.gui.app as module
+
+    assert callable(module.main)
+    source = Path(module.__file__).read_text()
+    assert 'if __name__ == "__main__":' in source

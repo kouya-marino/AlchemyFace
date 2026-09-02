@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from alchemyface import __version__
 from alchemyface.errors import AlchemyFaceError
-from alchemyface.models import MODELS, download, find_local
+from alchemyface.models import MODELS, download, find_in, find_local
 from alchemyface.pipeline import DEFAULT_THRESHOLD, Recognizer
 from alchemyface.store.memory import InMemoryStore
 
@@ -158,12 +158,17 @@ def resize(
 @app.command("download-models")
 def download_models(
     model_dir: Path | None = typer.Option(
-        None, "--model-dir", help="Where to write the weights (defaults to the cache)."
+        None,
+        "--model-dir",
+        help="Directory to write the weights into. Defaults to the cache.",
     ),
 ) -> None:
     """Fetch the ONNX weights ahead of first use."""
     for spec in MODELS.values():
-        existing = find_local(spec, model_dir)
+        # With an explicit --model-dir, only that directory counts as present.
+        # Reporting "already present" because a copy sits in the cache left the
+        # requested directory empty, which is not what the flag promises.
+        existing = find_in(spec, model_dir) if model_dir is not None else find_local(spec)
         if existing is not None:
             typer.echo(f"{spec.key}: already present at {existing}")
             continue

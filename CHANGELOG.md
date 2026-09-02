@@ -9,6 +9,41 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
+## [1.1.0] — 2026-09-02
+
+Two bugs found while writing down how to launch the application, and the
+`-m` entry point whose absence prompted the question.
+
+### Added
+
+- **`python -m alchemyface`** — the package is now runnable with `-m`, so
+  `python -m alchemyface db` works without the console script being on PATH.
+  It is deliberately identical to running `alchemyface`: same commands, same
+  help. `python -m alchemyface.gui.app` goes straight to the window, which is
+  the closest equivalent to the `python main.py` of the application this was
+  ported from.
+- `models.find_in(spec, directory)` — searches exactly one directory, where
+  `find_local` deliberately falls back to `ALCHEMYFACE_MODEL_DIR` and the cache.
+
+### Fixed
+
+- **`alchemyface download-models --model-dir X` wrote nothing to X** if a copy
+  of the weights happened to be in the cache. It printed `already present at
+  ~/.cache/…` and left X empty, while the flag's help said "Where to write the
+  weights". It now treats only X as present, and the help says what it does.
+- **`models.resolve(spec, model_dir=X)` ignored X when it had to download**,
+  writing to the cache instead. A caller who named a directory got the weights
+  somewhere else with nothing said.
+- **`models.download()` let a raw `PermissionError` escape** for an unwritable
+  destination — the one model failure in that module a caller had to catch
+  `OSError` for. It is now a `ModelDownloadError` naming the directory. This
+  mattered more once `resolve` started honouring `model_dir`, since an
+  unwritable directory became reachable rather than silently bypassed.
+
+### Notes
+
+- 413 tests; 290 run without a display.
+
 ## [1.0.0] — 2026-09-02
 
 Parity. Every tab of the application this was ported from now exists here, on

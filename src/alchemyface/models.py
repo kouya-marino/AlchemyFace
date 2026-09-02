@@ -96,6 +96,21 @@ def find_local(spec: ModelSpec, model_dir: Path | str | None = None) -> Path | N
     return None
 
 
+def find_in(spec: ModelSpec, directory: Path | str) -> Path | None:
+    """First existing file matching the spec's names in *exactly* this directory.
+
+    Unlike :func:`find_local` this does not fall back to the environment
+    variable or the cache. A caller that named a directory wants to know about
+    that directory: answering "already present" because the file is somewhere
+    else entirely is not useful.
+    """
+    for name in spec.candidates:
+        candidate = Path(directory) / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def sha256_of(path: Path | str) -> str:
     """Hex digest of a file, read in chunks so a 37 MB model is not slurped."""
     digest = hashlib.sha256()
@@ -113,8 +128,15 @@ def download(spec: ModelSpec, dest_dir: Path | str | None = None) -> Path:
     download can never be mistaken for a usable cache entry.
     """
     directory = Path(dest_dir) if dest_dir is not None else cache_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    handle, raw_tmp = tempfile.mkstemp(dir=directory, suffix=".part")
+    # Wrapped: a caller can name an unwritable directory, and every other model
+    # failure in this module surfaces as an AlchemyFaceError. Letting a raw
+    # PermissionError through would make the destination the one case a caller
+    # had to catch OSError for.
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        handle, raw_tmp = tempfile.mkstemp(dir=directory, suffix=".part")
+    except OSError as exc:
+        raise ModelDownloadError(f"cannot write to {directory}: {exc}") from exc
     os.close(handle)
     tmp = Path(raw_tmp)
 
@@ -152,4 +174,7 @@ def resolve(
             "and downloading was disabled. Set ALCHEMYFACE_MODEL_DIR, pass "
             "model_dir=, or run `alchemyface download-models`."
         )
-    return download(spec)
+    # Into ``model_dir`` when one was named, not the cache. Dropping it here
+    # meant a caller who asked for the weights in a particular place got them
+    # silently written somewhere else.
+    return download(spec, dest_dir=model_dir)

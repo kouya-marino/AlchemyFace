@@ -127,3 +127,67 @@ def test_registry_pins_both_real_models() -> None:
         assert len(spec.sha256) == 64
         # raw.githubusercontent serves LFS pointers, not weights.
         assert spec.url.startswith("https://media.githubusercontent.com/media/")
+
+
+# ------------------------------------------- naming a directory means that one
+#
+# `find_local` deliberately falls back to the environment variable and the
+# cache. A caller that named one directory needs the opposite, and conflating
+# the two meant `download-models --model-dir X` reported "already present"
+# because a copy sat in the cache, leaving X empty.
+
+
+def test_find_in_searches_only_the_named_directory(
+    tmp_path: Path, local_spec: ModelSpec, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "canonical.onnx").write_bytes(PAYLOAD)
+    monkeypatch.setattr(models, "cache_dir", lambda: cache)
+    wanted = tmp_path / "wanted"
+    wanted.mkdir()
+
+    # find_local is satisfied by the cache copy; find_in must not be.
+    assert models.find_local(local_spec, model_dir=wanted) == cache / "canonical.onnx"
+    assert models.find_in(local_spec, wanted) is None
+
+    (wanted / "legacy_name.onnx").write_bytes(PAYLOAD)
+    assert models.find_in(local_spec, wanted) == wanted / "legacy_name.onnx"
+
+
+def test_resolve_downloads_into_the_directory_it_was_given(
+    tmp_path: Path, local_spec: ModelSpec, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It used to drop model_dir on the download path and write to the cache."""
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(models, "cache_dir", lambda: cache)
+    wanted = tmp_path / "wanted"
+
+    resolved = models.resolve(local_spec, model_dir=wanted)
+    assert resolved.parent == wanted
+    assert resolved.read_bytes() == PAYLOAD
+    assert not cache.exists()
+
+
+def test_resolve_still_uses_the_cache_when_no_directory_is_named(
+    tmp_path: Path, local_spec: ModelSpec, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(models, "cache_dir", lambda: cache)
+    assert models.resolve(local_spec).parent == cache
+
+
+def test_download_reports_an_unwritable_destination_cleanly(tmp_path: Path, local_spec: ModelSpec) -> None:
+    """Every other model failure here is an AlchemyFaceError; a caller should
+    not have to catch OSError for this one case."""
+    import os
+    import stat
+
+    readonly = tmp_path / "readonly"
+    readonly.mkdir()
+    os.chmod(readonly, stat.S_IRUSR | stat.S_IXUSR)
+    try:
+        with pytest.raises(ModelDownloadError, match="cannot write to"):
+            models.download(local_spec, dest_dir=readonly)
+    finally:
+        os.chmod(readonly, 0o755)
