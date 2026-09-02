@@ -166,6 +166,28 @@ this is not more careful prose but tests that assert the artefact a user touches
 callback, and every fix in this release was confirmed to fail with itself
 reverted. 404 tests; 281 run without a display.
 
+### Unreleased — `python main.py` · 2026-09-02
+
+Repository-only, so no release: `main.py` is deliberately not packaged, and the
+wheel's contents are unchanged.
+
+The three documented ways to launch all required the package to be installed.
+A bare checkout had none, which is exactly the case the original covers with a
+nine-line `main.py`. Now so does this. It bootstraps `src/` onto the path and
+delegates to the `db` command, so it cannot drift from `alchemyface db`; an
+already-importable copy is left alone rather than shadowed by the working tree.
+
+`main.py` joined the ruff and mypy targets, and the build now fails if a
+top-level `main` reaches the wheel. That check was wrong on the first attempt —
+it ran `import main` from the workspace, where the checkout's own `main.py` is
+importable via `sys.path[0]`, so it reported a leak that did not exist and would
+have failed every run. Caught by testing the check against a planted `main.py`
+and the real `alchemyface/__main__.py` before trusting it. 430 tests; 301 run
+without a display.
+
+---
+
+
 ### 1.1.1 — a 1.0.0 regression in Save · 2026-09-02
 
 Found by a fan-out audit comparing the port tab-by-tab against the original,

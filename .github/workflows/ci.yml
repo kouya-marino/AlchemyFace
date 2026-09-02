@@ -60,11 +60,11 @@ jobs:
       - name: Install package (with dev extras)
         run: pip install -e ".[dev]"
       - name: Ruff lint
-        run: ruff check src tests
+        run: ruff check src tests main.py
       - name: Ruff format check
-        run: ruff format --check src tests
+        run: ruff format --check src tests main.py
       - name: Type check
-        run: mypy src/alchemyface
+        run: mypy src/alchemyface main.py
 
       # The README's PyPI badge is static, because the dynamic one showed a
       # version four releases behind: PyPI's JSON API lags after an upload,
@@ -162,12 +162,33 @@ jobs:
           fi
           echo "distribution is clean"
 
-      - name: Verify the wheel imports and the CLI runs
+      # main.py is a checkout convenience. Packaging it would install a
+      # top-level `main` module into site-packages, which is not ours to claim.
+      - name: The root launcher must not be packaged
+        run: |
+          if unzip -l dist/*.whl | grep -qE ' main\.py$| main/'; then
+            echo "::error::main.py leaked into the wheel as a top-level module"
+            unzip -l dist/*.whl
+            exit 1
+          fi
+          echo "the wheel claims no top-level main"
+
+      - name: Verify the wheel imports and every entry point runs
         run: |
           python -m venv /tmp/smoke
           /tmp/smoke/bin/pip install --quiet dist/*.whl
           /tmp/smoke/bin/python -c "import alchemyface; print('import OK', alchemyface.__version__)"
           /tmp/smoke/bin/alchemyface version
+          /tmp/smoke/bin/python -m alchemyface version
+          # Run from /tmp, not the workspace: the checkout's own main.py sits in
+          # the working directory and would be importable via sys.path[0],
+          # making this pass or fail for reasons unrelated to the wheel.
+          cd /tmp
+          if python_out=$(/tmp/smoke/bin/python -c "import main; print(main.__file__)" 2>/dev/null); then
+            echo "::error::the wheel installed a top-level main module at $python_out"
+            exit 1
+          fi
+          echo "no top-level main installed, as intended"
 
       - uses: actions/upload-artifact@v7
         with:

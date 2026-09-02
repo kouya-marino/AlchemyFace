@@ -67,11 +67,11 @@ jobs:
 
       - name: Lint
         run: |
-          ruff check src tests
-          ruff format --check src tests
+          ruff check src tests main.py
+          ruff format --check src tests main.py
 
       - name: Type check
-        run: mypy src/alchemyface
+        run: mypy src/alchemyface main.py
 
       - name: README PyPI badge must match the declared version
         run: |

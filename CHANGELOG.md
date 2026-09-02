@@ -7,7 +7,36 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-_Nothing yet._
+Repository-only; no release. The wheel's contents are unchanged, because
+`main.py` is deliberately not packaged, so minting a version for it would put an
+identical distribution on PyPI under a new number.
+
+### Added
+
+- **`main.py` at the repository root**, so `python main.py` launches the
+  application from a bare `git clone` with nothing installed — the way the
+  application this was ported from is started, and the first thing anyone who
+  knows it will try. It puts `src/` on the path itself, and then hands off to
+  the `db` command rather than reimplementing it, so it cannot drift from
+  `alchemyface db`.
+
+  An already-importable `alchemyface` is left alone: prepending `src/`
+  unconditionally would shadow an installed copy with the working tree, which
+  is a surprising thing for a launcher to do when the two differ.
+
+- `main.py` is included in the `ruff` and `mypy` targets in CI and in the README
+  — an unchecked file at the root is a file that rots — and the build now fails
+  if a top-level `main` module reaches the wheel.
+
+### Notes
+
+- 430 tests; 301 run without a display.
+- The first version of the wheel check was wrong in a way worth recording: it
+  ran `python -c "import main"` from the workspace, where the checkout's own
+  `main.py` sits in the working directory and is importable via `sys.path[0]`.
+  It reported a leak that did not exist, and would have failed every CI run. It
+  now runs from `/tmp`, and the wheel-listing grep was checked against both a
+  planted `main.py` and the real `alchemyface/__main__.py`.
 
 ## [1.1.1] — 2026-09-02
 
