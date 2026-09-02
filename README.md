@@ -1,6 +1,6 @@
 # AlchemyFace
 
-[![PyPI](https://img.shields.io/badge/PyPI-v0.6.0-blue.svg)](https://pypi.org/project/alchemyface/)
+[![PyPI](https://img.shields.io/badge/PyPI-v1.0.0-blue.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -119,15 +119,21 @@ panel per face.
 
 1. Choose an input folder and click **Open**. Every image is detected in the
    background, the one on screen first, so the sidebar fills in as you work.
+   Opening a folder with no images in it keeps what you already have loaded
+   rather than clearing it.
 2. Each detected face becomes a numbered box on the canvas and a row on the
    right — thumbnail, **Include**, **Name**, **Group**. Names default to the
    filename, or `<stem>_faceN` when an image holds several.
 3. Untick **Include** to drop a face; its box turns dashed.
 4. Click a box to select that face. **Re-detect** runs YuNet again, asking first
-   if you have unsaved edits. The **Detection score** spinbox (0.10–0.99, default
-   0.9 — YuNet's own) applies to the live detector immediately; lower finds more
-   faces, higher is stricter.
-5. **Save .pkl** writes every included, named face, computing any embedding not
+   if you have unsaved edits. The **Detection score** spinbox (arrows step
+   0.10–0.99, default 0.9 — YuNet's own; typed values are honoured down to 0.05)
+   applies to the live detector immediately, on Return or on leaving the field;
+   lower finds more faces, higher is stricter.
+5. **YuNet detector** and **Face recognizer** take a path to a different `.onnx`
+   file. Leave them empty to use the resolved weights — cache, then
+   `ALCHEMYFACE_MODEL_DIR`, then download.
+6. **Save .pkl** writes every included, named face, computing any embedding not
    already cached and renumbering ids from `"0"`.
 
 Sidebar glyphs: `·` pending · `✗` detection failed · `⚠` no face ·
@@ -142,7 +148,15 @@ own roadmap.
 
 Read-only viewer for any database: `# · ID · Name · Group · Dim · L2 norm ·
 first values`, with a summary line of counts, dimension and file size. Reads the
-four-tuple list form and the back-compatible `{name: vector}` dict.
+four-tuple list form and the back-compatible `{name: vector}` dict, numbering
+the latter's entries by position.
+
+It opens **malformed** databases too — a NaN, an infinity, an odd-sized vector —
+listing every entry and reporting what is wrong with each. Refusing them would
+withhold exactly the diagnosis the tab exists to give. Edit DB opens them for
+the same reason, so the bad rows can be deleted; saving still validates every
+vector, so a repaired file is clean and nothing enrols against a vector that
+cannot be matched.
 
 ### Edit DB
 
@@ -153,14 +167,59 @@ Open an existing database and change it.
   closing the window asks before discarding them.
 - **Remove selected** — or the Delete key — drops the chosen rows.
 - **Double-click a Group cell** to edit it inline from a combobox of presets.
-  Anything you type is added to the presets.
-- **Add faces** from a folder or a single image. Each detected face becomes a
-  candidate card — thumbnail, Include, Name, Group — and nothing changes until
-  you press **Add checked**. Duplicate names are allowed: the robot resolves by
-  best cosine similarity, so a second photo of someone is an improvement.
-- **Save** writes over the loaded path; **Save as…** writes elsewhere.
+  Anything you type is added to the presets; Escape abandons the edit.
+- **Add faces** from a folder or a single image — type or paste a path, or pick
+  one with **…**, then press **Process**. Each detected face becomes a candidate
+  card — thumbnail, Include, Name, Group — and nothing changes until you press
+  **Add checked**. Duplicate names are allowed: the robot resolves by best
+  cosine similarity, so a second photo of someone is an improvement.
+- **Add checked** takes every usable ticked candidate. One with no name is
+  skipped and reported rather than blocking the batch, and anything skipped or
+  left unticked stays on the list for a second pass.
+- **Save** writes over the loaded path; **Save as…** writes elsewhere. With
+  faces added but no database loaded, Save opens Save as… — that is a first
+  save, not a mistake. Saving an **empty** table is refused: it would replace a
+  real database with an empty one and cannot be undone.
+- A line under the path says what is loaded and whether it is saved.
 
-*Resize is planned — see [versions.md](versions.md).*
+### Resize
+
+Shrink photos until the detector can see the face again.
+
+YuNet's largest anchors miss a face that fills most of the frame — which is what
+a phone selfie held at arm's length looks like. Resizing recovers it:
+
+```
+selfie 426x546, face ~93% of frame   ->  0 faces detected
+resized to 0.5   213x273             ->  1 face detected
+```
+
+Detection is **not monotonic** in the ratio, because it depends on the face
+matching an anchor scale. In that same example 0.25 finds nothing while 0.15
+works again — so if one ratio fails, try another.
+
+- Source and output each take **a folder or a single image**.
+- Output defaults beside the source: `photos` → `photos_resized`,
+  `face.jpg` → `face_resized.jpg`.
+- **Ratio** 0.05–5.0, default 0.5. LANCZOS when shrinking, BICUBIC when growing,
+  EXIF orientation applied, and near-lossless saves (JPEG q95 subsampling 0,
+  WebP q95 method 6) because these images are about to be enrolled and
+  compression artefacts move the embedding.
+- Writing over the source is refused — a resize cannot be undone. For the same
+  reason a ratio outside 0.05–5.0 is **refused rather than clamped**, in the tab
+  and on the command line: silently turning a mistyped 50 into 5.0 would rewrite
+  the folder at a size nobody asked for.
+- Single-image mode refuses an extension the Build tab would not scan, rather
+  than writing a `.tif` that is then ignored.
+- A per-file log, cleared and headed at the start of each run and written as
+  each file lands; one unreadable file does not abandon the batch.
+
+The same work from the command line:
+
+```bash
+alchemyface resize --folder photos/ --ratio 0.5
+alchemyface resize --image selfie.jpg --output smaller.jpg --ratio 0.25
+```
 
 ### The `.pkl` schema
 

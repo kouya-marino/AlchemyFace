@@ -75,6 +75,9 @@ class EditDBView(ttk.Frame):
 
         self.session = EditSession()
         self._path_var = tk.StringVar(value="")
+        self._summary_var = tk.StringVar(value="No DB loaded.")
+        self._add_folder_var = tk.StringVar(value="")
+        self._add_image_var = tk.StringVar(value="")
         self._pending_vars: list[tk.Variable] = []
         self._thumb_refs: list[ImageTk.PhotoImage] = []
         self._build_ui()
@@ -85,6 +88,20 @@ class EditDBView(ttk.Frame):
     def frame_title(self) -> str:
         """The entries frame's label, carrying ` *` when unsaved."""
         return self._entries_frame.cget("text")
+
+    @property
+    def summary_text(self) -> str:
+        """The line under the path row, as displayed."""
+        return self._summary_var.get()
+
+    def pending_card_count(self) -> int:
+        """How many candidate cards are actually drawn.
+
+        Counts widgets rather than model rows, so a pane that was never
+        refreshed — cards left over from candidates already consumed — is
+        visible to a test instead of hiding behind a correct model.
+        """
+        return sum(1 for child in self._pending_inner.winfo_children() if child.winfo_class() == "TLabelframe")
 
     def row_count(self) -> int:
         return len(self._tree.get_children())
@@ -108,7 +125,21 @@ class EditDBView(ttk.Frame):
         for group in sorted(self.session.groups_in_use()):
             self._on_preset_added(group)
         self._render()
-        self._set_status(f"Loaded {len(self.session.entries)} entries from {target}")
+        # load() drops the pending list; without this the cards for the previous
+        # database's candidates stay on screen and can still be ticked.
+        self._render_pending()
+        problems = self.session.problems
+        if problems:
+            self._set_status(f"Loaded {len(self.session.entries)} entries with {len(problems)} problem(s).")
+            self.reporter.info(
+                "Loaded with problems",
+                f"{target.name} loaded so it can be repaired, but "
+                f"{len(problems)} entr{'y is' if len(problems) == 1 else 'ies are'} malformed:\n"
+                + "\n".join(f"  • {problem}" for problem in problems)
+                + "\n\nDelete those rows before saving — saving validates every vector.",
+            )
+        else:
+            self._set_status(f"Loaded {len(self.session.entries)} entries from {target}")
         return True
 
     def remove_selected(self, indices: list[int] | None = None) -> int:
@@ -152,19 +183,39 @@ class EditDBView(ttk.Frame):
             self.session.pending[index].group = value
 
     def add_checked(self) -> int:
-        """Merge every ticked candidate into the table."""
-        try:
-            added = self.session.merge_checked()
-        except ValueError as exc:
-            self._failed(str(exc))
-            return 0
-        if added:
-            self._render()
-            self._set_status(f"Added {added} face(s).")
-        return added
+        """Merge every usable ticked candidate into the table.
+
+        Both panes are redrawn unconditionally. Redrawing only when something
+        was added left consumed candidates on screen, so pressing the button a
+        second time appeared to do nothing at all.
+        """
+        result = self.session.merge_checked()
+        self._render()
+        self._render_pending()
+        if result.added and result.skipped:
+            self._set_status(f"Added {result.added} face(s); skipped {len(result.skipped)}.")
+            self.reporter.info(
+                "Added with skips",
+                f"Added {result.added} face(s).\n\nSkipped {len(result.skipped)}, still listed below:\n"
+                + "\n".join(f"  • {reason}" for reason in result.skipped),
+            )
+        elif result.added:
+            self._set_status(f"Added {result.added} face(s).")
+        elif result.skipped:
+            self._failed("Nothing was added:\n" + "\n".join(f"  • {reason}" for reason in result.skipped))
+        else:
+            self._set_status("Nothing ticked — tick a face to add it.")
+        return result.added
 
     def save(self, path: Path | str | None = None) -> bool:
-        """Write the database. With no argument, writes where it came from."""
+        """Write the database. With no argument, writes where it came from.
+
+        Faces added without loading a database first have nowhere to go, so ask
+        rather than refuse — that is a first save, not a mistake.
+        """
+        if path is None and self.session.path is None and self.session.entries:
+            self._save_as()
+            return self.session.path is not None
         try:
             destination = self.session.save(path)
         except ValueError as exc:
@@ -236,6 +287,12 @@ class EditDBView(ttk.Frame):
             self.session.add_pending(found)
             self._render_pending()
             self._set_status(f"Found {len(found)} face(s) to add.")
+        else:
+            # Silence here read as a dead button: the click did nothing visible
+            # whether detection ran and found nothing or never ran at all.
+            where = images[0].name if len(images) == 1 else f"{len(images)} images"
+            self._set_status(f"No faces found in {where}.")
+            self.reporter.info("No faces", f"No faces were detected in {where}.")
         return len(found)
 
     # -------------------------------------------------------------------- UI
@@ -251,6 +308,12 @@ class EditDBView(ttk.Frame):
         ttk.Entry(top, textvariable=self._path_var, width=70).grid(row=0, column=1, sticky="ew", padx=6, pady=3)
         ttk.Button(top, text="Browse…", command=self._pick_db).grid(row=0, column=2, padx=6, pady=3)
         ttk.Button(top, text="Load", command=self.load).grid(row=0, column=3, padx=6, pady=3)
+        # A line that always says what is loaded and whether it is saved. The
+        # status bar is shared with three other tabs, so it scrolls away and
+        # cannot be relied on to answer "did my save actually happen".
+        ttk.Label(top, textvariable=self._summary_var, foreground="#555555").grid(
+            row=1, column=0, columnspan=4, sticky="w", padx=6, pady=(0, 2)
+        )
         top.columnconfigure(1, weight=1)
 
         self._entries_frame = ttk.LabelFrame(self, text=TITLE, padding=4)
@@ -275,8 +338,26 @@ class EditDBView(ttk.Frame):
 
         add = ttk.LabelFrame(self, text="Add faces", padding=6)
         add.grid(row=1, column=1, sticky="nsew", padx=(4, 8), pady=4)
-        ttk.Button(add, text="From folder…", command=self._pick_folder).pack(side=tk.TOP, fill=tk.X, pady=2)
-        ttk.Button(add, text="From image…", command=self._pick_image).pack(side=tk.TOP, fill=tk.X, pady=2)
+        # Path box + Browse + Process for each, rather than a Browse that
+        # processes immediately: a path could not be typed or pasted, and
+        # re-running after fixing a name meant re-opening the dialog.
+        ttk.Label(add, text="Folder:").pack(side=tk.TOP, anchor="w")
+        folder_row = ttk.Frame(add)
+        folder_row.pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
+        ttk.Entry(folder_row, textvariable=self._add_folder_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(folder_row, text="…", width=3, command=self._pick_folder).pack(side=tk.LEFT, padx=2)
+        ttk.Button(add, text="Process folder", command=self._process_folder_clicked).pack(
+            side=tk.TOP, fill=tk.X, pady=(0, 6)
+        )
+
+        ttk.Label(add, text="Image:").pack(side=tk.TOP, anchor="w")
+        image_row = ttk.Frame(add)
+        image_row.pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
+        ttk.Entry(image_row, textvariable=self._add_image_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(image_row, text="…", width=3, command=self._pick_image).pack(side=tk.LEFT, padx=2)
+        ttk.Button(add, text="Process image", command=self._process_image_clicked).pack(
+            side=tk.TOP, fill=tk.X, pady=(0, 2)
+        )
         ttk.Button(add, text="Add checked", command=self.add_checked).pack(side=tk.TOP, fill=tk.X, pady=(8, 2))
         self._pending_canvas = tk.Canvas(add, highlightthickness=0, width=320)
         pbar = ttk.Scrollbar(add, orient="vertical", command=self._pending_canvas.yview)
@@ -302,12 +383,30 @@ class EditDBView(ttk.Frame):
     def _pick_folder(self) -> None:
         chosen = filedialog.askdirectory(title="Select a folder of face images")
         if chosen:
-            self.process_folder(chosen)
+            self._add_folder_var.set(chosen)
 
     def _pick_image(self) -> None:
-        chosen = filedialog.askopenfilename(title="Select a face image")
+        patterns = " ".join(f"*{ext}" for ext in sorted(IMAGE_EXTENSIONS))
+        chosen = filedialog.askopenfilename(
+            title="Select a face image",
+            filetypes=[("Images", patterns), ("All files", "*.*")],
+        )
         if chosen:
-            self.process_image(chosen)
+            self._add_image_var.set(chosen)
+
+    def _process_folder_clicked(self) -> None:
+        raw = self._add_folder_var.get().strip()
+        if not raw:
+            self._failed("Set a folder to process.")
+            return
+        self.process_folder(raw)
+
+    def _process_image_clicked(self) -> None:
+        raw = self._add_image_var.get().strip()
+        if not raw:
+            self._failed("Set an image to process.")
+            return
+        self.process_image(raw)
 
     def _save_as(self) -> None:
         chosen = filedialog.asksaveasfilename(
@@ -338,17 +437,55 @@ class EditDBView(ttk.Frame):
         combo.place(x=box[0], y=box[1], width=box[2], height=box[3])
         combo.focus_set()
 
+        cancelled = False
+
         def commit(_event: tk.Event | None = None) -> None:
+            if cancelled:
+                return
             combo.destroy()
             self.set_group(index, var.get())
 
+        def cancel(_event: tk.Event | None = None) -> None:
+            """Escape abandons the edit, leaving the original group in place."""
+            nonlocal cancelled
+            cancelled = True
+            combo.destroy()
+
+        def commit_unless_dropdown(_event: tk.Event | None = None) -> None:
+            # Opening the dropdown takes focus away from the entry, which fired
+            # FocusOut and committed the half-typed value while the list was
+            # still open. Committing only when focus left the widget entirely
+            # is what the original did.
+            if combo.winfo_exists() and str(combo.tk.call("focus")).startswith(str(combo)):
+                return
+            commit()
+
         combo.bind("<Return>", commit)
-        combo.bind("<FocusOut>", commit)
+        combo.bind("<Escape>", cancel)
+        combo.bind("<FocusOut>", commit_unless_dropdown)
         combo.bind("<<ComboboxSelected>>", commit)
 
     # --------------------------------------------------------------- render
 
+    def _refresh_summary(self) -> None:
+        """Keep the line under the path row telling the truth.
+
+        Called from every render, so an edit that marks the session dirty shows
+        up without each caller having to remember.
+        """
+        count = len(self.session.entries)
+        if self.session.path is None and not count:
+            self._summary_var.set("No DB loaded.")
+        elif self.session.dirty:
+            self._summary_var.set(f"{count} entries (unsaved changes)")
+        elif self.session.path is not None:
+            size = self.session.path.stat().st_size / 1024 if self.session.path.exists() else 0.0
+            self._summary_var.set(f"{count} entries · {size:.1f} KB · {self.session.path}")
+        else:
+            self._summary_var.set(f"{count} entries")
+
     def _render(self) -> None:
+        self._refresh_summary()
         for item in self._tree.get_children():
             self._tree.delete(item)
         for row in self.session.rows():
@@ -365,6 +502,7 @@ class EditDBView(ttk.Frame):
                 ),
             )
         self._entries_frame.configure(text=f"{TITLE}{self.session.title_suffix}")
+        self._refresh_summary()
 
     def _release_pending_vars(self) -> None:
         """Detach traces before dropping, so Tk collects them while it can."""

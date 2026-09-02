@@ -35,10 +35,10 @@ def test_window_opens_with_a_title_and_the_version(app) -> None:  # type: ignore
     assert __version__ in app.title()
 
 
-def test_only_the_implemented_tabs_are_present(app) -> None:  # type: ignore[no-untyped-def]
-    # Tabs arrive one version at a time; no dead placeholders. Resize is not
-    # here yet and must not appear until it works.
-    assert app.tab_labels() == ["Build DB", "Edit DB", "Inspect DB"]
+def test_all_four_tabs_are_present(app) -> None:  # type: ignore[no-untyped-def]
+    # The same four the application was ported from, in the same order. Tabs
+    # arrived one version at a time and none was ever a dead placeholder.
+    assert app.tab_labels() == ["Build DB", "Edit DB", "Resize", "Inspect DB"]
 
 
 def test_status_starts_ready_and_can_be_set(app) -> None:  # type: ignore[no-untyped-def]
@@ -128,3 +128,136 @@ def test_a_real_production_database_loads(app, pkl_dir: Path) -> None:  # type: 
     assert app.inspect_view.load(path) is True
     assert app.inspect_view.row_count() == 30
     assert "dim=128" in app.inspect_view.summary_text
+
+
+def _broken_db(path: Path) -> Path:
+    """A database with one NaN vector and one of the wrong dimension."""
+    import pickle
+
+    with open(path, "wb") as handle:
+        pickle.dump(
+            [
+                ("1", "ada", "ceo", np.ones(128, dtype=np.float32)),
+                ("2", "grace", "staff", np.full(128, np.nan, dtype=np.float32)),
+                ("3", "linus", "staff", np.ones(64, dtype=np.float32)),
+            ],
+            handle,
+        )
+    return path
+
+
+def test_inspect_shows_a_database_a_strict_load_would_refuse(app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """The inspector exists to diagnose a broken file. Refusing to open one
+    withheld exactly the answer the user came for."""
+    assert app.inspect_view.load(_broken_db(tmp_path / "broken.pkl")) is True
+    assert app.inspect_view.row_count() == 3
+    assert any("problem" in title.lower() for title, _message in app.reporter.infos)
+
+
+def test_edit_opens_a_broken_database_so_it_can_be_repaired(app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """Deleting the offending row is the whole reason to open it here."""
+    broken = _broken_db(tmp_path / "broken.pkl")
+    assert app.edit_view.load(broken) is True
+    assert app.edit_view.row_count() == 3
+    assert len(app.edit_view.session.problems) == 2
+
+    app.edit_view.remove_selected([1, 2])
+    assert app.edit_view.save() is True
+    reread = PickleStore()
+    reread.load(broken)  # strict: the repaired file is clean
+    assert [entry.label for entry in reread.entries()] == ["ada"]
+
+
+# --------------------------------------------------- the detection-score knob
+#
+# 0.6.0's notes, README and CHANGELOG all described a "Detection score" spinbox
+# in the Build tab. `apply_score_threshold` existed and was correct, but no
+# widget ever called it, so the threshold was pinned at 0.9 and the docs
+# described a control that was not there. These tests assert the widget itself.
+
+
+def _descendants(widget):  # type: ignore[no-untyped-def]
+    for child in widget.winfo_children():
+        yield child
+        yield from _descendants(child)
+
+
+def _build_tab(app):  # type: ignore[no-untyped-def]
+    return app.nametowidget(app.notebook.tabs()[0])
+
+
+def test_the_build_tab_has_a_detection_score_spinbox(app) -> None:  # type: ignore[no-untyped-def]
+    spinboxes = [w for w in _descendants(_build_tab(app)) if w.winfo_class() == "TSpinbox"]
+    assert spinboxes, "the Build tab has no Spinbox at all"
+    spin = spinboxes[0]
+    assert float(spin.cget("to")) == pytest.approx(0.99)
+    assert float(spin.cget("increment")) == pytest.approx(0.05)
+    labels = [str(w.cget("text")) for w in _descendants(_build_tab(app)) if w.winfo_class() == "TLabel"]
+    assert any("Detection score" in text for text in labels)
+
+
+def test_the_spinbox_is_bound_to_the_threshold_variable(app) -> None:  # type: ignore[no-untyped-def]
+    """A spinbox that shows the value but is wired to nothing would still pass
+    the test above; this checks the variable behind it is the real one."""
+    spin = next(w for w in _descendants(_build_tab(app)) if w.winfo_class() == "TSpinbox")
+    assert spin.cget("textvariable") == str(app._score_threshold_var)
+    spin.set("0.30")
+    assert app.score_threshold == pytest.approx(0.30)
+
+
+def test_turning_the_spinbox_reaches_the_live_detector(app) -> None:  # type: ignore[no-untyped-def]
+    """Clicking an arrow must reach the detector, not merely move the number.
+
+    The widget's own `command` callback is invoked through Tcl, which is what a
+    real arrow click does. `event_generate` is no good here: a withdrawn window
+    never receives it, so the test would pass against a spinbox wired to
+    nothing.
+    """
+
+    class Detector:
+        score_threshold = 0.9
+
+        def set_score_threshold(self, value: float) -> None:
+            self.score_threshold = value
+
+    class Recognizer:
+        def __init__(self) -> None:
+            self.detector = Detector()
+
+    recognizer = Recognizer()
+    app.set_recognizer(recognizer)
+    spin = next(w for w in _descendants(_build_tab(app)) if w.winfo_class() == "TSpinbox")
+    spin.set("0.25")
+    app.tk.call(spin.cget("command"))
+    assert recognizer.detector.score_threshold == pytest.approx(0.25)
+
+
+def test_the_spinbox_commits_on_return_and_focus_out(app) -> None:  # type: ignore[no-untyped-def]
+    """A value typed in and tabbed away from must take effect without also
+    having to touch an arrow."""
+    spin = next(w for w in _descendants(_build_tab(app)) if w.winfo_class() == "TSpinbox")
+    assert spin.bind("<Return>"), "Return is not bound"
+    assert spin.bind("<FocusOut>"), "FocusOut is not bound"
+
+
+# ------------------------------------------------------- the model path rows
+
+
+def test_the_build_tab_lets_you_choose_the_onnx_files(app) -> None:  # type: ignore[no-untyped-def]
+    labels = [str(w.cget("text")) for w in _descendants(_build_tab(app)) if w.winfo_class() == "TLabel"]
+    assert any("YuNet detector" in text for text in labels)
+    assert any("Face recognizer" in text for text in labels)
+
+
+def test_choosing_a_detector_model_discards_the_loaded_one(app) -> None:  # type: ignore[no-untyped-def]
+    """Otherwise the newly chosen weights would not take effect until restart."""
+    app.set_recognizer(object())
+    app._detector_path_var.set("/somewhere/face_detection_yunet.onnx")
+    app.set_recognizer(None)  # what _pick_detector_model does after setting the path
+    assert app.recognizer is None
+
+
+def test_the_output_path_starts_pre_filled(app) -> None:  # type: ignore[no-untyped-def]
+    """Empty meant Save always detoured through the dialog."""
+    assert app._output_var.get().endswith(".pkl")
+    assert "face_db_" in app._output_var.get()

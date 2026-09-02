@@ -374,6 +374,30 @@ def test_the_detection_score_reaches_the_live_detector(app, build) -> None:  # t
 
 
 def test_the_detection_score_is_clamped(app) -> None:  # type: ignore[no-untyped-def]
-    for raw, expected in ((5.0, 0.99), (-1.0, 0.10), (0.55, 0.55)):
+    for raw, expected in ((5.0, 0.99), (-1.0, 0.05), (0.55, 0.55)):
         app._score_threshold_var.set(raw)
         assert app.apply_score_threshold() == pytest.approx(expected)
+
+
+def test_opening_an_empty_folder_keeps_what_is_already_loaded(build, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """Opening the wrong folder by mistake used to discard a whole session's
+    naming work and replace it with an empty list."""
+    view, _fake = build()
+    before = view.entry_count
+    assert before == 3
+    view.set_name(0, "ada")
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert view.load_folder(empty) is False
+    assert view.entry_count == before
+    assert view.entries[0].faces[0].name == "ada"
+
+
+def test_opening_an_empty_folder_from_a_clean_start_is_still_allowed(build, app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """The guard protects work in progress; it must not block the first open."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    app.set_recognizer(FakeRecognizer(1))
+    assert app.annotation_view.load_folder(empty) is True
+    assert app.annotation_view.entry_count == 0

@@ -44,6 +44,25 @@ def row_from_face(face: Face) -> NDArray[np.float32]:
     return row
 
 
+MIN_SCORE = 0.05
+MAX_SCORE = 0.99
+"""The range OpenCV's YuNet behaves sensibly over.
+
+A score is a probability, so values outside it are meaningless: at 0 every
+anchor is a face and at 1 nothing ever is. cv2 accepts them without complaint
+and then returns garbage, so they are clamped here rather than at the caller —
+the GUI, the CLI and a library user all reach the same floor.
+"""
+
+
+def clamp_score(value: float) -> float:
+    """``value`` confined to the range YuNet behaves over. NaN yields the default."""
+    number = float(value)
+    if number != number:  # NaN compares unequal to itself
+        return 0.9
+    return max(MIN_SCORE, min(MAX_SCORE, number))
+
+
 class YuNetDetector:
     """Implements :class:`~alchemyface.detection.base.Detector` with YuNet."""
 
@@ -56,6 +75,7 @@ class YuNetDetector:
         nms_threshold: float = 0.3,
         top_k: int = 5000,
     ) -> None:
+        score_threshold = clamp_score(score_threshold)
         path = Path(model_path) if model_path else resolve(DETECTOR, model_dir)
         # The `Xxx.create` class-method form is what cv2's bundled type stubs
         # declare; the module-level `FaceDetectorYN_create` alias is not, and
@@ -74,7 +94,7 @@ class YuNetDetector:
         Rebuilding would discard nothing here, but the caller may hold cached
         embeddings that the threshold does not invalidate.
         """
-        self._score_threshold = float(value)
+        self._score_threshold = clamp_score(value)
         self._detector.setScoreThreshold(self._score_threshold)
 
     def detect(self, image: NDArray[np.uint8]) -> list[Face]:

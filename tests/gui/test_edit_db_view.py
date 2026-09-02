@@ -201,7 +201,7 @@ def test_processing_an_unreadable_image_reports(edit, tmp_path: Path) -> None:  
     broken = tmp_path / "broken.jpg"
     broken.write_bytes(b"not an image")
     assert edit.process_image(broken) == 0
-    assert edit.reporter.errors
+    assert any("broken.jpg" in message for _title, message in edit.reporter.errors)
 
 
 # ------------------------------------------------------------------- saving
@@ -272,3 +272,69 @@ def test_the_edit_tab_loads_models_on_its_own(app, database: Path, tmp_path: Pat
     assert found > 0, f"no faces detected in {real}"
     assert all(p.embedding is not None for p in app.edit_view.session.pending)
     del cv2
+
+
+def test_save_refuses_to_empty_the_loaded_database(edit, database: Path) -> None:  # type: ignore[no-untyped-def]
+    before = database.read_bytes()
+    edit.remove_selected(list(range(edit.row_count())))
+    assert edit.save() is False
+    assert database.read_bytes() == before
+    assert any("empty" in message for _title, message in edit.reporter.errors)
+
+
+def _folder_of_one_image(tmp_path: Path) -> Path:
+    folder = tmp_path / "shots"
+    folder.mkdir(exist_ok=True)
+    write_image(folder / "one.jpg")
+    return folder
+
+
+def test_add_checked_redraws_the_pending_cards(edit, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """Cards for consumed candidates used to stay on screen, so a second press
+    of Add checked did nothing and said nothing."""
+    edit.process_folder(_folder_of_one_image(tmp_path))
+    assert edit.pending_card_count() > 0
+    edit.add_checked()
+    assert edit.pending_card_count() == 0
+
+
+def test_an_unticked_candidate_keeps_its_card(edit, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """It was a "not yet", not a "no"."""
+    edit.process_folder(_folder_of_one_image(tmp_path))
+    edit.set_pending_include(0, False)
+    edit.add_checked()
+    assert edit.pending_card_count() == 1
+
+
+def test_loading_a_database_clears_the_previous_candidates(edit, tmp_path: Path, database: Path) -> None:  # type: ignore[no-untyped-def]
+    edit.process_folder(_folder_of_one_image(tmp_path))
+    assert edit.pending_card_count() > 0
+    edit.load(database)
+    assert edit.pending_card_count() == 0
+
+
+def test_processing_a_folder_with_no_faces_says_so(app, edit, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """Silence read as a dead button — the click did nothing visible whether
+    detection found nothing or never ran."""
+    app.set_recognizer(FakeRecognizer(faces_per_image=0))
+    edit.reporter.infos.clear()
+    assert edit.process_folder(_folder_of_one_image(tmp_path)) == 0
+    assert any("No faces" in title for title, _message in edit.reporter.infos)
+
+
+def test_the_summary_line_tracks_what_is_loaded(app, database: Path) -> None:  # type: ignore[no-untyped-def]
+    """The shared status bar scrolls away, so it cannot answer "did my save
+    actually happen"."""
+    view = app.edit_view
+    assert view.summary_text == "No DB loaded."
+
+    view.load(database)
+    assert "3 entries" in view.summary_text
+    assert str(database) in view.summary_text
+
+    view.remove_selected([0])
+    assert view.summary_text == "2 entries (unsaved changes)"
+
+    view.save()
+    assert "2 entries" in view.summary_text
+    assert "unsaved" not in view.summary_text

@@ -90,6 +90,71 @@ def db() -> None:
     run_app()
 
 
+@app.command()
+def resize(
+    ratio: float = typer.Option(0.5, "--ratio", help="Scale factor. 0.5 halves; 2.0 doubles."),
+    folder: Path | None = typer.Option(None, "--folder", exists=True, file_okay=False, help="Resize every image here."),
+    image: Path | None = typer.Option(None, "--image", exists=True, dir_okay=False, help="Resize a single image."),
+    output: Path | None = typer.Option(None, "--output", help="Destination. Defaults beside the source, suffixed."),
+) -> None:
+    """Resize images so a too-close face comes back into the detector's range.
+
+    YuNet's largest anchors miss a face filling most of the frame — a phone
+    selfie held at arm's length. Shrinking the photo recovers it. Detection is
+    not monotonic in the ratio, because it depends on the face matching an
+    anchor scale, so if one value does not work another may.
+    """
+    # Imported here so the command costs nothing until used, and so this module
+    # stays importable where Pillow is unavailable.
+    from alchemyface.gui.resize_data import (  # noqa: PLC0415
+        MAX_RATIO,
+        MIN_RATIO,
+        default_output_folder,
+        resize_folder,
+        resize_one,
+    )
+
+    if (folder is None) == (image is None):
+        typer.echo("give exactly one of --folder or --image", err=True)
+        raise typer.Exit(code=2)
+
+    # Refused rather than clamped, matching the Resize tab. Silently turning a
+    # mistyped 50 into 5.0 would rewrite the files at a size nobody asked for,
+    # and a resize cannot be undone.
+    if not MIN_RATIO <= ratio <= MAX_RATIO:
+        typer.echo(f"--ratio must be between {MIN_RATIO} and {MAX_RATIO}, got {ratio:g}", err=True)
+        raise typer.Exit(code=2)
+    scale = ratio
+
+    if folder is not None:
+        destination = output or default_output_folder(folder)
+        try:
+            outcomes = resize_folder(folder, destination, scale)
+        except (ValueError, NotADirectoryError) as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+        if not outcomes:
+            typer.echo(f"no images found in {folder}", err=True)
+            raise typer.Exit(code=1)
+        for outcome in outcomes:
+            typer.echo(f"  {outcome}")
+        written = sum(1 for o in outcomes if o.ok)
+        typer.echo(f"{written} resized, {len(outcomes) - written} failed → {destination}")
+        if written == 0:
+            raise typer.Exit(code=1)
+        return
+
+    assert image is not None
+    destination = output or image.with_name(f"{image.stem}_resized{image.suffix}")
+    try:
+        result = resize_one(image, destination, scale)
+    except (OSError, ValueError) as exc:
+        typer.echo(f"{image.name}: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"  {image.name}: {result}")
+    typer.echo(f"1 resized → {destination}")
+
+
 @app.command("download-models")
 def download_models(
     model_dir: Path | None = typer.Option(

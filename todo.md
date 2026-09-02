@@ -86,8 +86,10 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
       `queue.Queue` hand-off to the Tk thread, BGR LRU cache, clean shutdown.
 - [x] Keep the responsiveness work: 80 ms debounced canvas resize, cached
       `PhotoImage` keyed on (path, canvas size), 50 ms completion polling.
-- [x] Detection-score spinbox wired to the live detector. *(Actually shipped in
-      0.6.0 — this box was ticked in 0.4.0 while the control did not exist.)*
+- [x] Detection-score spinbox wired to the live detector. *(The widget shipped
+      in 1.0.0. Ticked in 0.4.0 with nothing behind it; 0.6.0 added the method
+      and documented the feature but never the widget. Caught by the 1.0.0
+      parity audit.)*
 - [x] Save flow with name validation and on-demand embedding fill-in.
 
 ### 0.5.0 · Edit DB — DONE
@@ -96,12 +98,12 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
       `_normalize_db`.
 - [x] Unsaved-changes tracking and close confirmation.
 
-### 0.7.0 · Resize — NEXT
-- [ ] Update `README.md` for what this version adds.
-- [ ] Port `resize_util.py` and `resize_view.py`.
-- [ ] `alchemyface resize` CLI subcommand replacing the hardcoded script.
+### 0.7.0 · Resize — DONE, shipped in 1.0.0
+- [x] Update `README.md` for what this version adds.
+- [x] Port `resize_util.py` and `resize_view.py`.
+- [x] `alchemyface resize` CLI subcommand replacing the hardcoded script.
 
-### 1.0.0 · Parity and polish
+### 1.0.0 · Parity and polish — DONE
 - [ ] Tab-by-tab audit against the original.
 - [ ] Screenshots for the README (prose kept current per version).
 - [ ] Coverage back above 80% with the GUI included.
