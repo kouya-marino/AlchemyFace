@@ -7,11 +7,43 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Repository-only; no release. The wheel's contents are unchanged, because
-`main.py` is deliberately not packaged, so minting a version for it would put an
-identical distribution on PyPI under a new number.
+_Nothing yet._
+
+## [1.2.0] — 2026-09-03
+
+A blank window on macOS, which turned out to be Apple's 2010 Tcl/Tk rather than
+anything in this code, and the launcher that had been missing since the port.
 
 ### Added
+
+- **A startup warning when Tk is too old to draw.** Apple ships Tcl/Tk 8.5.9,
+  and any Python built without pointing at something newer links against it. On
+  a current macOS it opens a window and paints nothing — not even a plain
+  `tk.Label` with a background colour. The app now detects it and names the fix.
+
+  Written to **stderr** as well as to the status bar and a dialog, because the
+  entire symptom is that nothing inside the window can be read. A blank window
+  with no explanation costs an hour; this was that hour.
+
+- `alchemyface.gui.tkcompat` — `tk_patchlevel()` and `stale_tk_warning()`. The
+  version comes from Tcl's `info patchlevel`, not `tkinter.TkVersion`, which is
+  a float and so reports 8.5.9 as `8.5` and cannot tell 8.6.0 from 8.6.18. An
+  unreadable version counts as fine rather than as old: crying wolf at everyone
+  whose Tk will not answer is worse than the thing being guarded against.
+
+### Changed
+
+- `ResizeView._pump` keeps `update_idletasks()`, and now records **why** for
+  good. The original called the full `update()`, and the difference had been
+  justified only by a segfault on Tk 8.5.9 — implying a newer Tk would make it
+  safe. It does not: restoring `update()` on Tk 8.6.18 **deadlocks** the resize
+  suite instead of crashing it.
+
+  The hazard was never the Tk version. `update()` processes *every* pending
+  event, not just redraws, so calling it inside this loop re-enters whatever
+  else is scheduled — the detection worker's polling among it. Old Tk turned
+  that into a segfault; new Tk turns it into a hang. Recorded in both the code
+  and the differences table so this is not "fixed" back a third time.
 
 - **`main.py` at the repository root**, so `python main.py` launches the
   application from a bare `git clone` with nothing installed — the way the
@@ -30,7 +62,7 @@ identical distribution on PyPI under a new number.
 
 ### Notes
 
-- 430 tests; 301 run without a display.
+- 450 tests; 315 run without a display.
 - The first version of the wheel check was wrong in a way worth recording: it
   ran `python -c "import main"` from the workspace, where the checkout's own
   `main.py` sits in the working directory and is importable via `sys.path[0]`.

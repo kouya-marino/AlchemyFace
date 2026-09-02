@@ -185,13 +185,21 @@ class ResizeView(ttk.Frame):
     def _pump(self) -> None:
         """Redraw the log so each line appears as the file is written.
 
-        `update_idletasks()`, deliberately, though the original called the full
-        `update()` here. `update()` re-enters the Tk event loop, and on the
-        macOS Tk this is developed against that reliably segfaults the GUI
-        suite — the same crash a full `update()` caused in the detection view,
-        for the same reason. Idle tasks alone still flush the redraw, so
-        progress is visible; what is given up is handling clicks mid-run, so a
-        long batch cannot be closed until it finishes.
+        ``update_idletasks()``, where the original called the full ``update()``.
+        That difference was first made because ``update()`` segfaulted this
+        project's GUI suite on Apple's system Tcl/Tk 8.5.9, and the guess was
+        that a newer Tk would make it safe again.
+
+        It does not. Restoring ``update()`` on Tk 8.6.18 deadlocks the resize
+        suite instead of crashing it, because the hazard was never the Tk
+        version: ``update()`` processes *every* pending event, not just redraws,
+        so calling it inside this loop re-enters whatever else is scheduled —
+        the detection worker's polling among it. Old Tk turned that
+        re-entrancy into a segfault and new Tk turns it into a hang.
+
+        So idle tasks it is, on every Tk. The redraw still happens, so progress
+        is visible as each file lands; what is given up is handling clicks
+        mid-run, so a long batch cannot be cancelled until it finishes.
         """
         try:
             self.update_idletasks()

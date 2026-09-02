@@ -12,6 +12,7 @@ application this was ported from.
 from __future__ import annotations
 
 import datetime as dt
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
@@ -24,6 +25,7 @@ from alchemyface.gui.edit_db_view import EditDBView
 from alchemyface.gui.inspect_view import InspectView
 from alchemyface.gui.reporting import DialogReporter, Reporter
 from alchemyface.gui.resize_view import ResizeView
+from alchemyface.gui.tkcompat import stale_tk_warning
 from alchemyface.store import PickleStore
 
 WINDOW_TITLE = "AlchemyFace — Face DB Builder"
@@ -71,6 +73,7 @@ class App(tk.Tk):
         overwriting their choice."""
 
         self._build_ui()
+        self._warn_if_tk_cannot_draw()
         self.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
     def _on_window_close(self) -> None:
@@ -337,6 +340,22 @@ class App(tk.Tk):
         self.annotation_view.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=4, pady=4)
 
     # ------------------------------------------------------------- callbacks
+
+    def _warn_if_tk_cannot_draw(self) -> None:
+        """Say so, in the terminal, when the window is unlikely to render.
+
+        Written to stderr as well as to the reporter and the status bar,
+        because those two are inside the window: the whole symptom is that the
+        window shows nothing, so the only channel certain to reach the user is
+        the terminal they launched from. A blank window with no explanation
+        costs an hour.
+        """
+        warning = stale_tk_warning(self)
+        if warning is None:
+            return
+        print(f"\nAlchemyFace: {warning}\n", file=sys.stderr, flush=True)
+        self.set_status("Tk is too old to draw reliably — see the terminal for the fix.")
+        self.reporter.error("Tk is too old", warning)
 
     def _output_folder(self) -> str | None:
         """The folder the Build tab writes to, for other tabs' file dialogs."""
