@@ -104,9 +104,16 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
 - [x] `alchemyface resize` CLI subcommand replacing the hardcoded script.
 
 ### 1.0.0 · Parity and polish — DONE
-- [ ] Tab-by-tab audit against the original.
-- [ ] Screenshots for the README (prose kept current per version).
-- [ ] Coverage back above 80% with the GUI included.
+- [x] Tab-by-tab audit against the original. *(Ran it as a fan-out audit with
+      three-lens adversarial verification: 33 candidates, 30 confirmed, all
+      fixed. It found a Detection score spinbox that four documents described
+      and no widget provided.)*
+- [x] Coverage back above 80% with the GUI included. *(86% branch.)*
+- [ ] Screenshots for the README. **Blocked on a real constraint, not effort:**
+      every tab worth showing displays the contents of `_local/`, which is
+      photographs of real people. A screenshot of the Build or Edit tab puts
+      face data in a public repository, which is the one thing this project is
+      careful not to do. Would need purpose-made images of nobody real.
 
 ---
 
@@ -114,16 +121,37 @@ disagrees with `pyproject.toml`, so this is enforced rather than remembered.
 
 - [x] Entry point: settled on the `alchemyface db` subcommand — one binary,
       and it fails with an apt-get hint when tkinter is absent.
-- [ ] macOS ships Tk 8.5.9. Every widget used works, but 8.6 fixes real
-      rendering bugs. Document, or require 8.6?
-- [ ] The robot matches at cosine `0.32`; the library's default is `0.363`.
-      Should the app surface the robot's threshold anywhere, or is that purely
-      the consumer's business?
+- [x] macOS ships Tk 8.5.9. Every widget used works, but 8.6 fixes real
+      rendering bugs. Document, or require 8.6? **Answered the hard way in
+      1.2.0: it does not merely have rendering bugs, it renders nothing at
+      all** — a window opens and paints not even a plain label. Resolved as
+      *document and warn*: the README states the requirement and the app
+      detects an old Tk at startup and prints the fix to stderr. Not enforced,
+      because the library and CLI are unaffected and refusing to start would
+      punish users who only wanted those.
+- [x] The robot matches at cosine `0.32`; the library's default is `0.363`.
+      Should the app surface the robot's threshold anywhere? **No** — settled as
+      documentation only. README "The recognition threshold" states both values
+      and that it is a tunable, not a constant. The app writes the database; who
+      reads it decides what clears. Baking a consumer's operating point into the
+      producer would be wrong.
 
 ## Carried over from the library
 
 - [ ] Backport `contents: read` to the publish workflow of AlchemyCV,
       AlchemyAnnotate, AlchemyDetect and AlchemyCloud. Their publish jobs work
       only because those repos are public.
-- [ ] 344 MB of packages left in Homebrew's Python 3.14 by the first Poetry
-      mishap. Inert, but worth removing.
+- [~] Packages left in Homebrew's Python 3.14 by the first Poetry mishap.
+      **The harmful part is gone:** an `alchemyface.pth` there pointed at this
+      working tree, so `/opt/homebrew/bin/python3` silently imported our source
+      as version 0.1.0. Uninstalled. What remains is ~356 MB of ordinary dev
+      tooling (black, pytest, mypy, hypothesis and friends) in that Python's
+      shared `site-packages`. Poetry does not need it — it has its own vendored
+      environment — so it is removable, but it is plausibly tooling in daily use
+      with `python3`, so it is the owner's call rather than mine.
+
+- [ ] `.python-version` is committed and names a machine-local env
+      (`alchemyface`), so a clone on another machine fails every `python` call
+      with ``pyenv: version `alchemyface' is not installed``. Convention is to
+      commit a *version* pyenv can install, or nothing. Harmless while nobody
+      else clones it.
