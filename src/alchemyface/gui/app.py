@@ -65,6 +65,8 @@ class App(tk.Tk):
         # different YuNet or SFace build can be tried without reinstalling.
         self._detector_path_var = tk.StringVar(value="")
         self._embedder_path_var = tk.StringVar(value="")
+        # What the live recognizer was built from, so a typed path is noticed.
+        self._recognizer_paths: tuple[str, str] = ("", "")
         """Once the user picks an output explicitly, opening a folder stops
         overwriting their choice."""
 
@@ -140,6 +142,14 @@ class App(tk.Tk):
         one database, which no threshold can then separate.
         """
         self._recognizer = recognizer
+        # Whatever is installed corresponds, by definition, to the paths on
+        # display now. Without this the signature check below would treat an
+        # externally supplied recognizer as stale the moment a path box was
+        # non-empty, and try to load the real weights over the top of it.
+        self._recognizer_paths = (
+            self._detector_path_var.get().strip(),
+            self._embedder_path_var.get().strip(),
+        )
         view = getattr(self, "annotation_view", None)
         if view is not None:
             view.invalidate_embeddings()
@@ -164,8 +174,15 @@ class App(tk.Tk):
         unaffected, but the `L2 norm` column stays meaningful and new databases
         remain comparable with existing ones.
         """
+        wanted = (self._detector_path_var.get().strip(), self._embedder_path_var.get().strip())
         if self._recognizer is not None:
-            return self._recognizer
+            # Rebuilt when the paths no longer match what it was built from.
+            # Browse nulls the recognizer itself, but a path typed or pasted
+            # straight into the box does not, and without this the app went on
+            # using the old weights while displaying the new path.
+            if wanted == self._recognizer_paths:
+                return self._recognizer
+            self.set_recognizer(None)
         try:
             from alchemyface.detection import YuNetDetector
             from alchemyface.embedding import SFaceEmbedder
@@ -178,6 +195,7 @@ class App(tk.Tk):
                 embedder=SFaceEmbedder(model_path=embedder_path, normalize=False),
                 store=PickleStore(),
             )
+            self._recognizer_paths = wanted
             self.set_status("Models loaded.")
         except Exception as exc:  # noqa: BLE001 - reported in the UI
             self.reporter.error("Models", f"Could not load the models:\n{exc}")

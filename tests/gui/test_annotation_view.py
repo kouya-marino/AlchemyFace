@@ -401,3 +401,61 @@ def test_opening_an_empty_folder_from_a_clean_start_is_still_allowed(build, app,
     app.set_recognizer(FakeRecognizer(1))
     assert app.annotation_view.load_folder(empty) is True
     assert app.annotation_view.entry_count == 0
+
+
+# ------------------------------------------- surviving a model change mid-session
+#
+# 1.0.0 added the .onnx path choosers to the Build tab, which drop the loaded
+# recognizer. Save then asked the *non-loading* provider for a model, got None,
+# and refused for good with "no model loaded" — one line after promising the
+# embeddings would be recomputed. Found by comparing against the original, which
+# reloads on Save.
+
+
+def test_save_reloads_the_model_after_a_path_change(build, app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """The whole failure, end to end: choose a different .onnx, then Save.
+
+    The recognizer must be genuinely absent for this to mean anything — with one
+    still installed the observing provider succeeds and the test passes against
+    the bug. `_ensure_recognizer` stands in for loading the real weights, which
+    the display-only CI job has no models for.
+    """
+    view, _fake = build()
+    database = tmp_path / "db.pkl"
+    assert app.save_database(database) is True
+
+    # exactly what _pick_detector_model does once a file has been chosen
+    app._detector_path_var.set(str(tmp_path / "other.onnx"))
+    app.set_recognizer(None)
+    assert app.recognizer is None
+
+    loaded = FakeRecognizer(1)
+    view._ensure_recognizer = lambda: loaded  # type: ignore[assignment]
+    assert app.save_database(database) is True, "Save refused after a model change"
+    assert database.exists()
+
+
+def test_save_asks_the_loading_provider_not_the_observing_one(build, app) -> None:  # type: ignore[no-untyped-def]
+    """The distinction the bug turned on. `fill_embeddings` runs on the main
+    thread, so it may load; the worker's provider may not touch Tk."""
+    view, _fake = build()
+    view.invalidate_embeddings()
+    asked: list[str] = []
+    view._get_recognizer = lambda: asked.append("observing") or None  # type: ignore[assignment,return-value]
+    view._ensure_recognizer = lambda: asked.append("loading") or FakeRecognizer(1)  # type: ignore[assignment]
+    view.fill_embeddings()
+    assert "loading" in asked
+    assert "observing" not in asked
+
+
+def test_redetect_without_a_model_keeps_the_annotation(build, app) -> None:  # type: ignore[no-untyped-def]
+    """Re-detect clears the faces before the worker runs, and the worker cannot
+    put them back without a model, so the typed name was lost for nothing."""
+    view, _fake = build()
+    view.set_name(0, "ada")
+    app.set_recognizer(None)
+    view._ensure_recognizer = lambda: None  # type: ignore[assignment]
+
+    view.redetect()
+    assert view.entries[0].faces, "re-detect destroyed the faces with no model to rebuild them"
+    assert view.entries[0].faces[0].name == "ada"

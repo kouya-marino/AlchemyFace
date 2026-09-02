@@ -166,6 +166,30 @@ this is not more careful prose but tests that assert the artefact a user touches
 callback, and every fix in this release was confirmed to fail with itself
 reverted. 404 tests; 281 run without a display.
 
+### 1.1.1 — a 1.0.0 regression in Save · 2026-09-02
+
+Found by a fan-out audit comparing the port tab-by-tab against the original,
+with each claimed regression verified by execution on both trees.
+
+- **Save refused for good after a model-path change** — the feature 1.0.0 added.
+  Choosing a different `.onnx` drops the recognizer, and `fill_embeddings` asked
+  the non-loading provider (the one that exists so the worker thread never
+  touches Tk), got `None`, and reported "no model loaded" for every face — one
+  line after promising a recompute. Retrying never helped. The original
+  self-heals, which is how it was caught.
+- A model path **typed** rather than browsed was displayed but ignored.
+- **Re-detect with no model wiped the names** it then could not rebuild.
+
+The provider split was sound — the original reads Tk variables from the worker
+thread, which is undefined behaviour. One call site was wired to the wrong half.
+
+One of the four new tests initially passed against the bug, because it left a
+recognizer installed; a test that cannot fail is worse than none, so it was
+rewritten until reverting the fix broke it. 417 tests; 290 run without a display.
+
+---
+
+
 ### 1.1.0 — the `-m` entry point, and two model-path bugs · 2026-09-02
 
 Prompted by a plain question — how do you launch this? The original was started

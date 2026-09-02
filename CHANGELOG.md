@@ -9,7 +9,44 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 _Nothing yet._
 
-## [1.1.0] — 2026-09-02
+## [1.1.1] — 2026-09-02
+
+A regression 1.0.0 introduced with the Build tab's `.onnx` path choosers, found
+by a fan-out audit comparing the port tab-by-tab against the application it was
+ported from. 1.1.0 was never released — this was found before it was tagged, so
+the two ship together.
+
+### Fixed
+
+- **Save refused for good after changing a model path.** Choosing a different
+  detector or recognizer drops the loaded recognizer, and `fill_embeddings`
+  asked the *non-loading* provider for one — the provider that exists so the
+  detection worker never touches Tk. It got `None` and reported
+  `no model loaded` for every face, one line after the status bar promised
+  `Model changed — N cached embedding(s) will be recomputed.` Retrying never
+  helped; the only escape was Open, which discards every name typed so far.
+  It now asks the loading provider, which is safe because its one caller is
+  the Save button, on the main thread. The original application self-heals here,
+  which is how the audit spotted it.
+- **A model path typed into the box was displayed but ignored.** Browse drops
+  the recognizer itself; typing or pasting a path did not, so the app went on
+  using the old weights. `ensure_recognizer` now compares the paths against what
+  the live recognizer was built from and rebuilds on a mismatch — the check the
+  original had.
+- **Re-detect with no model destroyed the annotation it could not rebuild.** It
+  cleared the faces and their typed names, then submitted to a worker with no
+  model. It now checks first and leaves the work alone.
+
+### Notes
+
+- The provider split itself was right: the original's single loading provider
+  reads Tk variables from the worker thread, which is undefined behaviour. The
+  defect was one call site wired to the wrong half.
+- 417 tests; 290 run without a display. Each of the four new tests was confirmed
+  to fail with its own fix reverted — including one first written so weakly it
+  passed against the bug, which is worse than no test.
+
+## [1.1.0] — 2026-09-02 (unreleased)
 
 Two bugs found while writing down how to launch the application, and the
 `-m` entry point whose absence prompted the question.

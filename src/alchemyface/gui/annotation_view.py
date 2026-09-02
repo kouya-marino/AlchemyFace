@@ -282,6 +282,11 @@ class AnnotationView(ttk.Frame):
         entry = self._entries[self._current]
         if entry.edited and confirm is not None and not confirm():
             return
+        # Checked before anything is cleared: this wipes the faces and their
+        # typed names, and the worker cannot put them back without a model.
+        if self._ensure_recognizer() is None:
+            self._set_status(f"{entry.path.name}: no model loaded, so nothing was re-detected.")
+            return
         entry.detected = False
         entry.faces = []
         entry.error = None
@@ -314,7 +319,11 @@ class AnnotationView(ttk.Frame):
 
         Returns the problems encountered, so the caller can refuse to save.
         """
-        recognizer = self._get_recognizer()
+        # The *loading* provider, deliberately. This runs on the main thread —
+        # its only caller is the Save button — and changing a model path drops
+        # the recognizer, so the non-loading provider made Save refuse for good
+        # with "no model loaded", one line after promising a recompute.
+        recognizer = self._ensure_recognizer()
         errors: list[str] = []
         for entry in self._entries:
             if not entry.detected:

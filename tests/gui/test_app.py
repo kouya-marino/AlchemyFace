@@ -261,3 +261,24 @@ def test_the_output_path_starts_pre_filled(app) -> None:  # type: ignore[no-unty
     """Empty meant Save always detoured through the dialog."""
     assert app._output_var.get().endswith(".pkl")
     assert "face_db_" in app._output_var.get()
+
+
+def test_a_typed_model_path_takes_effect(app, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """Browse nulls the recognizer itself, but a path typed or pasted straight
+    into the entry box does not. Without a signature check the app went on using
+    the old weights while displaying the new path — the original rebuilt."""
+    first = object()
+    app.set_recognizer(first)
+    app._recognizer_paths = ("", "")
+    assert app.ensure_recognizer() is first
+
+    app._detector_path_var.set(str(tmp_path / "different.onnx"))
+    built: list[tuple[str, str]] = []
+
+    def fake_build() -> object:
+        built.append((app._detector_path_var.get(), app._embedder_path_var.get()))
+        return first
+
+    # ensure_recognizer must notice the mismatch and drop the stale recognizer
+    app.ensure_recognizer()
+    assert app.recognizer is None or built, "the typed path was ignored"
