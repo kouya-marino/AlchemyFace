@@ -166,10 +166,31 @@ this is not more careful prose but tests that assert the artefact a user touches
 callback, and every fix in this release was confirmed to fail with itself
 reverted. 404 tests; 281 run without a display.
 
-### Unreleased — `python main.py` · 2026-09-02
+### 1.2.0 — a blank window, and `python main.py` · 2026-09-03
 
-Repository-only, so no release: `main.py` is deliberately not packaged, and the
-wheel's contents are unchanged.
+A GUI that opened and showed nothing, which turned out to be Apple's 2010
+Tcl/Tk rather than anything in this code.
+
+**The window was blank because the Python was linked against Tcl/Tk 8.5.9.**
+Every Python on the machine was: pyenv builds it without tcltk flags unless
+told otherwise, and `/usr/bin/python3` uses the system Tk too. On macOS 26 it
+opens a window and paints nothing at all — not even a plain `tk.Label` with a
+background colour. Proven by installing `python-tk@3.10`, whose Tk 8.6.18 drew
+correctly, then rebuilding pyenv 3.10.21 against `tcl-tk@8`. The app now warns
+at startup and names the fix, on **stderr** as well as in the window, since a
+blank window is exactly the case where nothing in the window can be read.
+
+**Three things worth recording about how this went.** My evidence that the
+window worked was a process that did not exit — which is entirely compatible
+with a blank window, and the 123 GUI tests cannot catch it either because they
+call `withdraw()` and so never test painting. Then I proposed restoring the
+original's full `update()` on the theory that Tk 8.6 made it safe; it does not —
+it deadlocks the resize suite rather than segfaulting it, because `update()`
+re-enters every pending callback and not just redraws. The differences table now
+says so, so it is not "fixed" back a third time. And 3.10.21 rather than a
+rebuilt 3.10.6, because pyenv-virtualenv stores environments inside the version
+directory: reinstalling 3.10.6 would have deleted `acloud_env`, which belongs to
+another project.
 
 The three documented ways to launch all required the package to be installed.
 A bare checkout had none, which is exactly the case the original covers with a
@@ -244,7 +265,7 @@ package could not be run with `-m` at all, and two bugs in the model paths.
 | Bad schema | returns `None` | raises `PickleSchemaError` with a reason |
 | Layout | flat, `gui/` beside `main.py` | `src/alchemyface/gui/` |
 | Tooling | requirements.txt, pytest | setuptools, ruff, mypy, CI, PyPI |
-| Resize progress | full `update()` per file | `update_idletasks()` — `update()` re-enters the Tk event loop and segfaults the GUI suite on macOS Tk |
+| Resize progress | full `update()` per file | `update_idletasks()` — `update()` processes *every* pending event, not just redraws, so inside the loop it re-enters the detection worker's polling: it segfaults on Tk 8.5.9 and deadlocks on 8.6.18. Progress still draws; a batch cannot be cancelled mid-run |
 | Names | written verbatim | trimmed of surrounding whitespace, which is invisible in the table but makes a second identity |
 | Detection score floor | clamped in the GUI only | clamped in `YuNetDetector`, so the library and CLI get it too |
 | Malformed `.pkl` | displayed | displayed, with each problem reported; still refused for enrolment |

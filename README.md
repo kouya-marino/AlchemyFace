@@ -1,6 +1,6 @@
 # AlchemyFace
 
-[![PyPI](https://img.shields.io/badge/PyPI-v1.1.1-blue.svg)](https://pypi.org/project/alchemyface/)
+[![PyPI](https://img.shields.io/badge/PyPI-v1.2.0-blue.svg)](https://pypi.org/project/alchemyface/)
 [![CI](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml/badge.svg)](https://github.com/kouya-marino/AlchemyFace/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
@@ -256,10 +256,35 @@ so both are coerced. A stricter reader would refuse a database that works today.
 
 `opencv-python-headless`, `numpy`, `typer`, `Pillow`. Python 3.10 or newer.
 
-**The GUI needs `tkinter`, but the library does not.** Nothing in the library
-imports it, so `import alchemyface` works on a server, in Docker, or in CI with
-no Tk installed — enforced by tests, not hoped for. `alchemyface db` reports what
-to install rather than raising:
+**The GUI needs `tkinter` 8.6 or newer.** The library does not need it at all —
+nothing in the library imports it, so `import alchemyface` works on a server, in
+Docker, or in CI with no Tk installed, enforced by tests rather than hoped for.
+
+On macOS the *version* matters as much as the presence. Apple ships Tcl/Tk
+**8.5.9** (2010), and any Python built without pointing at something newer links
+against it. On a current macOS it opens a window and paints **nothing** — not
+even a plain label with a background colour. The app now detects this at startup
+and prints the fix to the terminal, because the window itself is unreadable:
+
+```
+$ python main.py
+AlchemyFace: This Python is using Tcl/Tk 8.5.9, which is too old to draw on a
+current macOS — the window will open but is likely to be blank.
+
+Tk 8.6 or newer is needed. To fix it:
+
+  brew install tcl-tk@8
+  PYTHON_CONFIGURE_OPTS="--enable-framework \
+    --with-tcltk-includes='-I$(brew --prefix tcl-tk@8)/include/tcl-tk' \
+    --with-tcltk-libs='-L$(brew --prefix tcl-tk@8)/lib -ltcl8.6 -ltk8.6'" \
+    pyenv install 3.10.21
+```
+
+Homebrew's default `tcl-tk` is 9.x, which CPython only supports from 3.13, so
+`tcl-tk@8` is the one to install. `brew install python-tk@3.10` is a quick way to
+confirm the diagnosis without compiling anything.
+
+`alchemyface db` reports a missing `tkinter` rather than raising:
 
 ```
 $ alchemyface db
