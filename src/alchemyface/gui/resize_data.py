@@ -8,7 +8,6 @@ ordinary file work, so the whole feature is testable without a display.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -58,21 +57,6 @@ class ResizeOutcome:
         if self.ok:
             return f"{self.source.name}: {self.result}"
         return f"{self.source.name}: FAILED ({self.error})"
-
-
-def clamp_ratio(value: float) -> float:
-    """Bring a ratio into range, falling back to the default if it is not a number.
-
-    A Tk Spinbox will hand over whatever was typed, so NaN and infinity are
-    reachable from the interface rather than hypothetical.
-    """
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return DEFAULT_RATIO
-    if math.isnan(number):
-        return DEFAULT_RATIO
-    return max(MIN_RATIO, min(MAX_RATIO, number))
 
 
 def default_output_folder(source: Path | str) -> Path:

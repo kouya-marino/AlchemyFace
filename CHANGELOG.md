@@ -19,9 +19,9 @@ top of the published `alchemyface` library rather than a private wrapper.
 - **Resize tab** and **`alchemyface resize`** — shrink photos until the detector
   can see the face again. Folder or single image on both the source and output
   side, ratio 0.05–5.0, per-file log, and a refusal to write over the source.
-- `alchemyface.gui.resize_data`: `resize_one`, `resize_folder`, `plan_folder`,
-  `clamp_ratio`, `default_output_folder`. No Tk, so the whole feature is tested
-  without a display.
+- `alchemyface.gui.resize_data`: `resize_one`, `resize_one_outcome`,
+  `resize_folder`, `plan_folder`, `default_output_folder`. No Tk, so the whole
+  feature is tested without a display.
 
 ### Why the Resize tab exists — measured, not inherited
 
@@ -116,7 +116,7 @@ Missing controls and feedback:
 - `YuNetDetector` now clamps its own score to 0.05–0.99. It previously accepted
   1.5 and -3.0 unchanged, which cv2 takes without complaint and then returns
   garbage for.
-- 413 tests; 287 run without a display.
+- 404 tests; 281 run without a display.
 
 ### Deliberate differences from the original
 

@@ -17,7 +17,6 @@ from alchemyface.gui.resize_data import (
     MAX_RATIO,
     MIN_RATIO,
     ResizeOutcome,
-    clamp_ratio,
     default_output_folder,
     plan_folder,
     resize_folder,
@@ -36,19 +35,6 @@ def an_image(path: Path, width: int = 200, height: int = 100, mode: str = "RGB")
 
 def test_ratio_defaults_are_the_originals() -> None:
     assert (MIN_RATIO, MAX_RATIO, DEFAULT_RATIO) == (0.05, 5.0, 0.5)
-
-
-@pytest.mark.parametrize(
-    "given,expected",
-    [(0.5, 0.5), (0.0, MIN_RATIO), (-3.0, MIN_RATIO), (99.0, MAX_RATIO), (5.0, 5.0)],
-)
-def test_ratio_is_clamped(given: float, expected: float) -> None:
-    assert clamp_ratio(given) == pytest.approx(expected)
-
-
-def test_a_nonsense_ratio_falls_back_to_the_default() -> None:
-    assert clamp_ratio(float("nan")) == pytest.approx(DEFAULT_RATIO)
-    assert clamp_ratio(float("inf")) == pytest.approx(MAX_RATIO)
 
 
 # ------------------------------------------------------------- resize_one

@@ -37,12 +37,6 @@ def test_the_ratio_starts_at_a_half(resize) -> None:  # type: ignore[no-untyped-
     assert resize.ratio == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize("given,expected", [(0.25, 0.25), (99.0, 5.0), (0.0, 0.05)])
-def test_the_ratio_is_clamped(resize, given: float, expected: float) -> None:  # type: ignore[no-untyped-def]
-    resize._ratio_var.set(given)
-    assert resize.ratio == pytest.approx(expected)
-
-
 # ----------------------------------------------------------------- a folder
 
 

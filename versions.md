@@ -164,7 +164,7 @@ documented the *feature*, leaving the same hole one layer down. What catches
 this is not more careful prose but tests that assert the artefact a user touches
 — so the new tests query the widget tree and invoke the widget's own Tcl
 callback, and every fix in this release was confirmed to fail with itself
-reverted. 413 tests; 287 run without a display.
+reverted. 404 tests; 281 run without a display.
 
 ---
 

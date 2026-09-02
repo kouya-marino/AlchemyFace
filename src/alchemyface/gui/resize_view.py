@@ -18,7 +18,6 @@ from alchemyface.gui.resize_data import (
     DEFAULT_RATIO,
     MAX_RATIO,
     MIN_RATIO,
-    clamp_ratio,
     default_output_folder,
     plan_folder,
     resize_one,
@@ -53,7 +52,11 @@ class ResizeView(ttk.Frame):
 
     @property
     def ratio(self) -> float:
-        return clamp_ratio(self._safe_ratio())
+        """The ratio currently in the box, with a non-numeric entry read as the
+        default. Not clamped: a value outside the legal range is refused when a
+        run starts, so silently reporting a different number here would
+        contradict what the button does."""
+        return self._safe_ratio()
 
     def log_text(self) -> str:
         return self._log.get("1.0", tk.END)
